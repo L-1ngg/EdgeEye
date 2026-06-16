@@ -23,7 +23,6 @@
 协作内容：
 
 - 使用成员2提供的目标检测模型和标签配置；
-- 集成成员3提供的仪表读数模块；
 - 对接成员4提供的后端接口；
 - 向成员5提供可展示的实时检测数据。
 
@@ -31,7 +30,7 @@
 
 - 成员2提供的目标检测模型；
 - 成员2提供的 `classes.json` 和预处理参数；
-- 成员3提供的仪表识别模块或调用方式；
+- 成员2提供的 `best.pt`、`best.onnx`、`label.names` 和测试样例；
 - 成员4提供的后端接口地址、字段格式和鉴权方式；
 - 全组统一遵守 [数据契约与接口规范](./contracts.md)。
 
@@ -44,7 +43,6 @@
 检测框
 设备类别
 故障类别
-仪表裁剪图
 推理耗时
 FPS
 设备资源占用
@@ -62,10 +60,10 @@ FPS
   "imageHeight": 720,
   "detections": [
     {
-      "category": "meter",
-      "deviceType": "meter",
-      "faultType": null,
-      "confidence": 0.96,
+      "category": "insulator_defect",
+      "deviceType": "insulator",
+      "faultType": "surface_damage",
+      "confidence": 0.91,
       "bbox": [120, 80, 360, 420]
     }
   ],
@@ -102,9 +100,12 @@ FPS
 
 ### 模型部署
 
+- 参考 [`atlas-insulator-detection`](https://gitee.com/jerry12345555555/atlas-insulator-detection) 的 `best.pt -> ONNX -> ATC -> OM -> ACL` 路线；
 - 跑通官方目标检测样例；
 - 明确模型输入尺寸、颜色格式和归一化参数；
 - 将成员2提供的 ONNX 模型转换为板端可运行格式；
+- 输出 `atc` 转换命令，记录 `soc_version`、输入尺寸、输入 dtype 和 CANN 版本；
+- 将 OM 模型、`label.names` 和推理脚本放在固定部署目录；
 - 验证转换后模型推理结果是否与开发机一致；
 - 输出模型转换命令和依赖说明。
 
@@ -112,18 +113,27 @@ FPS
 
 - 从摄像头读取帧；
 - 按配置抽帧进行推理，不把视频流每帧都上传；
-- 完成图像预处理；
-- 调用模型推理；
-- 解析检测结果；
+- 完成图像预处理：resize 到模型输入尺寸、BGR 转 RGB、归一化、HWC 转 CHW、增加 batch 维度；
+- 使用 ACL 加载 OM 并调用模型推理；
+- 解析 YOLO 输出，完成置信度过滤、坐标转换和 NMS；
 - 绘制检测框、类别和置信度；
-- 裁剪仪表区域并交给成员3模块处理；
 - 执行相似帧过滤和关键帧选择；
 - 按 `POST /api/detection/results` 契约上传关键帧检测结果、图片路径和性能数据。
+
+### 板端推理服务
+
+- 推理服务启动时初始化 ACL 并加载 OM，进程内复用同一个模型实例；
+- 提供本地健康检查接口，至少返回模型路径、类别文件、CANN/ACL 初始化状态；
+- 单帧推理结果统一转换为 EdgeEye `Detection` 结构；
+- 保存标注图到 `annotated/{inspectionId}/{frameId}.jpg`；
+- 退出或异常时释放 OM、ACL context 和 device，避免重复加载时报错；
+- 可提供临时 `/infer` 图片调试接口，但最终联调以上传 `/api/detection/results` 为准。
 
 ### 容错与性能
 
 - 摄像头断线时给出错误状态；
 - 模型加载失败时输出明确日志；
+- ACL 错误码需要输出上下文，例如模型路径、输入 shape、buffer 字节数和 CANN 版本；
 - 后端上传失败时支持重试或缓存；
 - 上传前写入本地 outbox 队列，收到后端 ACK 后再标记已确认；
 - 每个上传 payload 必须携带 `idempotencyKey`，默认 `{inspectionId}:{frameId}`；
@@ -144,10 +154,10 @@ FPS
 ### 关键帧策略
 
 - 正常画面每秒最多上传一帧 `periodic_sample`；
-- 新故障、新环境异常或仪表状态变化时立即上传；
+- 新故障、新环境异常或系统状态变化时立即上传；
 - 故障持续中每 5 秒最多上传一帧 `fault_updated`；
 - 故障恢复时上传一帧 `fault_resolved`；
-- 类别不变、检测框 IoU 大于 `0.9`、仪表读数变化小且风险状态不变时，判定为相似帧，不上传。
+- 类别不变、检测框 IoU 大于 `0.9` 且风险状态不变时，判定为相似帧，不上传。
 
 ## 建议目录
 
@@ -164,6 +174,7 @@ logs/
 - Atlas 环境配置说明；
 - 摄像头读取程序；
 - 模型转换脚本或命令记录；
+- OM 推理脚本或板端推理服务；
 - 实时推理程序；
 - 后端上传程序；
 - 边缘端配置文件；

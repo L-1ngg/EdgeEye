@@ -692,26 +692,9 @@ components:
         - foreign_object
         - smoke
         - fire
-        - meter_over_limit
-        - meter_read_failed
         - person_intrusion
         - helmet_missing
         - unknown
-    MeterType:
-      type: string
-      enum:
-        - voltage_meter
-        - current_meter
-        - pressure_meter
-        - unknown
-    ReadingStatus:
-      type: string
-      enum:
-        - normal
-        - warning
-        - critical
-        - unknown
-        - failed
     RiskLevel:
       type: string
       enum:
@@ -769,7 +752,6 @@ components:
         - fault_started
         - fault_updated
         - fault_resolved
-        - meter_status_changed
         - manual_capture
         - system_event
     ResultStatus:
@@ -964,8 +946,6 @@ components:
             - foreign_object
             - smoke
             - fire
-            - meter_over_limit
-            - meter_read_failed
             - person_intrusion
             - helmet_missing
             - unknown
@@ -981,39 +961,6 @@ components:
         imageHeight:
           type: integer
           minimum: 1
-    MeterReading:
-      type: object
-      required:
-        - meterId
-        - meterType
-        - value
-        - unit
-        - readingStatus
-        - confidence
-        - rawText
-        - imageUrl
-      properties:
-        meterId:
-          type: string
-        meterType:
-          $ref: "#/components/schemas/MeterType"
-        value:
-          type: number
-          nullable: true
-        unit:
-          type: string
-          nullable: true
-        readingStatus:
-          $ref: "#/components/schemas/ReadingStatus"
-        confidence:
-          type: number
-          minimum: 0
-          maximum: 1
-        rawText:
-          type: string
-          nullable: true
-        imageUrl:
-          type: string
     Fault:
       type: object
       required:
@@ -1232,7 +1179,6 @@ components:
         - imageWidth
         - imageHeight
         - detections
-        - meterReadings
         - performance
       properties:
         idempotencyKey:
@@ -1277,10 +1223,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Detection"
-        meterReadings:
-          type: array
-          items:
-            $ref: "#/components/schemas/MeterReading"
         performance:
           $ref: "#/components/schemas/Performance"
     DetectionUploadResult:
@@ -1507,7 +1449,6 @@ components:
           enum:
             - fault
             - alarm
-            - meter_exception
             - system_exception
         inspectionId:
           type: string
@@ -1635,10 +1576,6 @@ components:
               type: string
             device:
               $ref: "#/components/schemas/Device"
-            meterReadings:
-              type: array
-              items:
-                $ref: "#/components/schemas/MeterReading"
             faults:
               type: array
               items:

@@ -12,10 +12,10 @@
 ├── edge-app/
 ├── camera/
 ├── model-deploy/
+├── board-backend/
 ├── dataset/
 ├── labels/
 ├── training/
-├── meter-reader/
 ├── rules/
 ├── prompt-template/
 ├── server/
@@ -32,8 +32,10 @@
 - `docs/` 存放项目文档和契约；
 - `edge-app/` 存放 Atlas 边缘端主程序；
 - `model-deploy/` 存放模型转换、部署脚本和板端模型；
+- `board-backend/` 存放开发板本地推理服务和调试接口；
 - `training/` 存放模型训练代码和配置；
-- `meter-reader/` 存放仪表识别代码；
+- `rules/` 存放故障和告警规则；
+- `prompt-template/` 存放大模型维修建议提示词模板；
 - `server/` 存放后端服务；
 - `web/` 存放前端应用；
 - `demo-data/` 存放演示用图片、视频和模拟接口数据；
@@ -46,7 +48,6 @@
 ```text
 raw/{inspectionId}/{frameId}.jpg
 annotated/{inspectionId}/{frameId}.jpg
-meter/{inspectionId}/{frameId}-meter-{index}.jpg
 videos/demo-{date}-{scene}.mp4
 ```
 
@@ -55,7 +56,6 @@ videos/demo-{date}-{scene}.mp4
 ```text
 raw/inspection-20260616-0001/frame-000001.jpg
 annotated/inspection-20260616-0001/frame-000001.jpg
-meter/inspection-20260616-0001/frame-000001-meter-001.jpg
 ```
 
 接口中的 URL 统一加 `/uploads/` 前缀，例如 `/uploads/raw/inspection-20260616-0001/frame-000001.jpg`。本节路径是存储目录相对路径。
@@ -65,6 +65,8 @@ meter/inspection-20260616-0001/frame-000001-meter-001.jpg
 ```text
 models/detector-v1.onnx
 models/detector-v1.om
+models/detector-v1.pt
+models/label.names
 models/classes-v1.json
 models/preprocess-v1.json
 ```
@@ -74,7 +76,6 @@ models/preprocess-v1.json
 ```text
 rules/fault-rules.json
 rules/alarm-rules.json
-rules/meter-thresholds.json
 prompt-template/advice-template.md
 ```
 
@@ -97,7 +98,13 @@ config/local.example.yaml
 | `BACKEND_BASE_URL` | 后端接口地址 |
 | `CAMERA_SOURCE` | 摄像头编号、视频文件或 RTSP 地址 |
 | `MODEL_PATH` | 板端模型路径 |
+| `MODEL_DIR` | OM、类别文件和模型配置目录 |
+| `OM_MODEL_PATH` | OM 模型绝对路径，优先级高于 `MODEL_PATH` |
 | `CLASSES_PATH` | 类别文件路径 |
+| `LABEL_NAMES_PATH` | `label.names` 路径，顺序必须与训练类别一致 |
+| `ACL_DEVICE_ID` | Atlas 推理设备 ID |
+| `CONF_THRESHOLD` | 置信度阈值 |
+| `IOU_THRESHOLD` | NMS IoU 阈值 |
 | `UPLOAD_IMAGE_DIR` | 图片保存目录 |
 | `EDGE_UPLOAD_MIN_INTERVAL_MS` | 正常状态关键帧最小上传间隔 |
 | `EDGE_FAULT_UPDATE_INTERVAL_MS` | 故障持续中证据帧最小上传间隔 |
@@ -170,33 +177,23 @@ config/local.example.yaml
   "classes": [
     {
       "id": 0,
-      "name": "meter",
+      "name": "insulator_normal",
       "type": "device"
     },
     {
       "id": 1,
-      "name": "insulator",
-      "type": "device"
+      "name": "insulator_defect",
+      "type": "fault"
     },
     {
       "id": 2,
-      "name": "surface_damage",
+      "name": "foreign_object",
       "type": "fault"
     },
     {
       "id": 3,
-      "name": "smoke",
-      "type": "environment"
-    },
-    {
-      "id": 4,
-      "name": "person_intrusion",
-      "type": "environment"
-    },
-    {
-      "id": 5,
-      "name": "helmet_missing",
-      "type": "environment"
+      "name": "bird_nest",
+      "type": "fault"
     }
   ]
 }
@@ -204,6 +201,55 @@ config/local.example.yaml
 
 `type` 必须使用 [数据契约与接口规范](./contracts.md) 中的 `modelClassType` 枚举。`name` 必须能映射到 `deviceType` 或 `faultType`。
 `classes.json` 必须包含 `version`，后端和前端展示模型版本时使用该值。
+`bird_nest` 可在第一版映射为 `faultType: "foreign_object"`，避免新增接口枚举。
+
+### 推荐训练与部署主线
+
+参考 [`atlas-insulator-detection`](https://gitee.com/jerry12345555555/atlas-insulator-detection) 的主线建议直接沿用到本项目：
+
+```text
+dataset.yaml + label.names
+  ↓
+train.py 训练得到 best.pt
+  ↓
+Ultralytics export 得到 best.onnx
+  ↓
+昇腾环境使用 atc 转成 detector-v1.om
+  ↓
+Atlas 开发板通过 ACL 加载 OM 推理
+```
+
+推荐第一版模型配置：
+
+- 输入尺寸：`640x640`；
+- batch：`1`；
+- 导出 `opset`：`11`；
+- 置信度阈值：`0.25`；
+- NMS IoU 阈值：`0.45`。
+
+板端推理预处理必须保持一致：
+
+- BGR 转 RGB；
+- resize 到模型输入尺寸；
+- 归一化到 `[0, 1]`；
+- HWC 转 CHW；
+- 增加 batch 维度，最终输入 `NCHW`。
+
+板端后处理必须包含：
+
+- 置信度过滤；
+- 坐标从模型输入空间映射回原图；
+- NMS；
+- 输出 `class_id`、`class_name`、`confidence`、`bbox`、`inference_ms` 和 `fps`。
+
+Atlas 部署记录里必须保留：
+
+- Atlas 开发板型号；
+- CANN 版本；
+- `atc` 命令；
+- `soc_version`；
+- OM 输入和输出 shape；
+- `label.names` 与 `classes.json` 的一致性检查结果。
 
 ## 模型交付规范
 
@@ -248,7 +294,6 @@ config/local.example.yaml
 | 正常状态上传间隔 | 1000 ms |
 | 故障持续中上传间隔 | 5000 ms |
 | 检测框相似 IoU 阈值 | 0.9 |
-| 仪表读数变化阈值 | 1 个最小业务单位 |
 | 本地队列容量 | 最近 1000 条或按磁盘空间配置 |
 
 上传流程：
@@ -287,27 +332,6 @@ config/local.example.yaml
 重试建议使用指数退避，失败后进入 `pending` 等待下次上传；超过最大重试次数后保留为 `dead`，不得静默删除。
 
 ## 规则文件规范
-
-### `meter-thresholds.json`
-
-```json
-{
-  "voltage_meter": {
-    "unit": "V",
-    "normalMin": 220,
-    "normalMax": 240,
-    "warningMin": 210,
-    "warningMax": 250
-  }
-}
-```
-
-判断规则：
-
-- `normalMin <= value <= normalMax`：`normal`；
-- `warningMin <= value < normalMin` 或 `normalMax < value <= warningMax`：`warning`；
-- 超出 `warningMin` 和 `warningMax`：`critical`；
-- OCR 失败：`failed`。
 
 ### `fault-rules.json`
 
@@ -400,6 +424,8 @@ GET /api/system/status
 - 摄像头读取测试；
 - 单帧推理测试；
 - 连续视频推理测试；
+- OM 加载和释放测试；
+- ONNX 与 OM 一致性测试；
 - 后端上传测试；
 - 断网或后端不可用测试；
 - 30 分钟连续运行测试。
@@ -410,17 +436,16 @@ GET /api/system/status
 - 记录误报样例；
 - 记录漏报样例；
 - 输出推荐阈值；
+- 验证 `dataset.yaml`、`classes.json` 和 `label.names` 顺序一致；
 - 验证 ONNX 推理结果。
 
-### 成员3专项算法测试
+### 成员3规则与建议测试
 
-- 正常读数样例；
-- 预警读数样例；
-- 异常读数样例；
-- OCR 失败样例；
-- 低置信度样例；
 - 故障规则触发样例；
-- 智能建议输出格式测试。
+- 告警规则触发样例；
+- 规则模板降级样例；
+- 大模型维修建议输出格式测试；
+- 大模型失败降级测试。
 
 ### 成员4接口测试
 
@@ -431,7 +456,7 @@ GET /api/system/status
 - 缺失字段返回错误；
 - 故障和告警生成；
 - 故障和告警处理状态更新；
-- 智能建议生成；
+- 大模型维修建议生成；
 - Dashboard 统计；
 - 报告生成和导出。
 
@@ -441,9 +466,8 @@ GET /api/system/status
 - Dashboard 异常状态；
 - 实时巡检展示检测框；
 - 实时巡检展示关键帧、过期态和无帧态；
-- 实时巡检展示仪表读数；
 - 故障中心展示聚合事件；
-- 故障中心展示智能建议；
+- 故障中心展示大模型维修建议；
 - 报告中心展示报告生成中、导出成功和导出失败；
 - 后端接口失败时页面有明确提示。
 
@@ -452,9 +476,11 @@ GET /api/system/status
 进入第 6-7 天联调前必须具备：
 
 - 成员1可以读取摄像头或测试视频；
-- 成员2提供第一版 ONNX 模型和 `classes.json`；
-- 成员3提供至少一个固定仪表图片识别结果；
+- 成员2提供第一版 `best.pt`、ONNX 模型、`classes.json`、`label.names` 和至少 5 张验证图；
+- 成员1提供 OM 转换命令或第一版 OM 模型；
+- 成员3提供第一版 `fault-rules.json`、`alarm-rules.json` 和大模型维修建议提示词；
 - 成员4提供 `POST /api/detection/results`；
+- 成员4提供 `POST /api/advice/generate` 或可演示的降级建议结果；
 - 成员5提供实时巡检页面；
 - 全组使用同一份数据契约。
 
@@ -467,8 +493,8 @@ GET /api/system/status
 - 后端服务可启动；
 - 前端页面可访问；
 - Dashboard 有统计和系统状态；
-- 实时巡检有检测框、设备结果和仪表读数；
-- 故障中心有故障、告警和智能建议；
+- 实时巡检有检测框、设备结果和故障结果；
+- 故障中心有故障、告警和大模型维修建议；
 - 报告中心有报告；
 - 有备用图片、视频和模拟数据；
 - 有操作文档和答辩 PPT。

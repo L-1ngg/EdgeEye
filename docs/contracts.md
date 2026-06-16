@@ -32,7 +32,7 @@
 | 上传结果 | `result-000001` |
 | 故障记录 | `fault-000001` |
 | 告警记录 | `alarm-000001` |
-| 智能建议 | `advice-000001` |
+| 维修建议 | `advice-000001` |
 | 报告 | `report-20260616-0001` |
 
 ### 坐标规范
@@ -80,32 +80,9 @@
 | `foreign_object` | 异物 |
 | `smoke` | 烟雾 |
 | `fire` | 明火 |
-| `meter_over_limit` | 仪表超限 |
-| `meter_read_failed` | 仪表读数失败 |
 | `person_intrusion` | 人员闯入 |
 | `helmet_missing` | 未佩戴安全帽 |
 | `unknown` | 未知 |
-
-### 仪表类型 `meterType`
-
-| 值 | 中文含义 |
-| --- | --- |
-| `voltage_meter` | 电压表 |
-| `current_meter` | 电流表 |
-| `pressure_meter` | 压力表 |
-| `unknown` | 未知 |
-
-两周内优先实现 `voltage_meter`。
-
-### 读数状态 `readingStatus`
-
-| 值 | 中文含义 |
-| --- | --- |
-| `normal` | 正常 |
-| `warning` | 预警 |
-| `critical` | 异常 |
-| `unknown` | 未知 |
-| `failed` | 识别失败 |
 
 ### 风险等级 `riskLevel`
 
@@ -192,7 +169,6 @@
 | `device` | 设备类目标 |
 | `fault` | 设备外观故障 |
 | `environment` | 环境异常 |
-| `meter` | 仪表专项类别 |
 
 ### 上传原因 `uploadReason`
 
@@ -204,7 +180,6 @@
 | `fault_started` | 故障首次出现 |
 | `fault_updated` | 故障持续中且达到更新间隔 |
 | `fault_resolved` | 故障消失或恢复 |
-| `meter_status_changed` | 仪表状态变化 |
 | `manual_capture` | 人工抓拍 |
 | `system_event` | 系统状态变化 |
 
@@ -280,10 +255,10 @@
 边缘端可以连续采集和推理，但不得默认每帧上传。推荐策略：
 
 - 正常状态每 1 秒最多上传 1 张 `periodic_sample`；
-- 新故障、仪表状态变化或系统状态变化时立即上传；
+- 新故障或系统状态变化时立即上传；
 - 故障持续中每 5 秒最多上传 1 张 `fault_updated`；
 - 故障恢复后上传 1 张 `fault_resolved`；
-- 相邻帧检测类别不变、检测框 IoU 大于 `0.9`、仪表读数变化小于业务阈值且风险状态不变时，可以过滤不上传。
+- 相邻帧检测类别不变、检测框 IoU 大于 `0.9` 且风险状态不变时，可以过滤不上传。
 
 ### 事件聚合
 
@@ -348,7 +323,7 @@
 | `NOT_FOUND` | 数据不存在 |
 | `UPLOAD_FAILED` | 图片或结果上传失败 |
 | `MODEL_RESULT_INVALID` | 模型结果格式错误 |
-| `ADVICE_GENERATION_FAILED` | 智能建议生成失败 |
+| `ADVICE_GENERATION_FAILED` | 维修建议生成失败 |
 | `SERVICE_UNAVAILABLE` | 后端服务不可用 |
 | `DUPLICATE_UPLOAD` | 重复上传，后端已按幂等规则处理 |
 | `IDEMPOTENCY_CONFLICT` | 同一幂等键对应不同请求内容 |
@@ -356,7 +331,7 @@
 | `INVALID_STATE_TRANSITION` | 状态流转不合法 |
 | `RESULT_NOT_READY` | 最新结果尚未生成 |
 | `RESULT_STALE` | 最新结果已过期 |
-| `ADVICE_NOT_READY` | 智能建议仍在生成 |
+| `ADVICE_NOT_READY` | 维修建议仍在生成 |
 | `REPORT_GENERATING` | 报告仍在生成 |
 | `REPORT_EXPORT_FAILED` | 报告导出失败 |
 | `UPSTREAM_TIMEOUT` | 上游模块超时 |
@@ -380,8 +355,8 @@ HTTP 状态码建议：
 ```json
 {
   "deviceId": "device-001",
-  "deviceName": "1号线路电压表",
-  "deviceType": "meter",
+  "deviceName": "2号线路绝缘子",
+  "deviceType": "insulator",
   "location": "2号线路A相",
   "status": "online",
   "createdAt": "2026-06-16T10:00:00+08:00",
@@ -408,10 +383,10 @@ HTTP 状态码建议：
 ```json
 {
   "detectionId": "detection-000001",
-  "category": "meter",
-  "deviceType": "meter",
-  "faultType": null,
-  "confidence": 0.96,
+  "category": "insulator_defect",
+  "deviceType": "insulator",
+  "faultType": "surface_damage",
+  "confidence": 0.91,
   "bbox": [120, 80, 360, 420],
   "imageWidth": 1280,
   "imageHeight": 720
@@ -427,28 +402,6 @@ HTTP 状态码建议：
 - `detectionId` 由后端保存后生成；Atlas 上传时不需要提供。
 - Atlas 上传时 `deviceType` 和 `faultType` 至少有一个非空；纯设备目标填写 `deviceType`，故障或环境异常目标填写 `faultType`。
 - `bbox` 必须满足 `0 <= x1 < x2 <= imageWidth`、`0 <= y1 < y2 <= imageHeight`。
-
-### 仪表读数 `MeterReading`
-
-```json
-{
-  "meterId": "device-001",
-  "meterType": "voltage_meter",
-  "value": 235.6,
-  "unit": "V",
-  "readingStatus": "normal",
-  "confidence": 0.89,
-  "rawText": "235.6",
-  "imageUrl": "/uploads/meter/inspection-20260616-0001/frame-000001-meter-001.jpg"
-}
-```
-
-字段规则：
-
-- 成功识别时 `value`、`unit`、`rawText` 必须有值。
-- OCR 失败时 `readingStatus` 必须为 `failed`，`value` 必须为 `null`，`rawText` 可为 `null` 或识别到的原始字符串。
-- 低置信度但仍可解析数值时，`readingStatus` 按阈值结果填写，后端可根据规则生成 `meter_read_failed` 或人工复核告警。
-- `meterId` 优先使用设备 ID；无法确认设备时可使用 `unknown`，但必须保留 `imageUrl` 便于人工复核。
 
 ### 故障记录 `Fault`
 
@@ -482,10 +435,8 @@ HTTP 状态码建议：
 
 生成规则：
 
-- `Fault` 由后端基于 `Detection`、`MeterReading` 和规则文件统一生成并保存。
-- Atlas 和仪表模块不直接上传 `Fault`，除非后续明确扩展上传契约。
-- `faultType: meter_over_limit` 由仪表读数阈值触发。
-- `faultType: meter_read_failed` 由 OCR 失败、读数为空或置信度低于规则阈值触发。
+- `Fault` 由后端基于 `Detection` 和规则文件统一生成并保存。
+- Atlas 不直接上传 `Fault`，除非后续明确扩展上传契约。
 - `alarmLevel` 必须遵守本文档的 `riskLevel` 默认映射，或遵守已登记的 `alarm-rules.json` 覆盖规则。
 - 同一 `eventKey` 下的连续帧不新建故障，只更新聚合字段。
 
@@ -516,7 +467,7 @@ HTTP 状态码建议：
 - 告警去重默认键为 `deviceId + faultType + alarmLevel`，在 `dedupWindowSeconds` 时间窗口内只保留一条未处理告警。
 - 去重命中时不新建告警，只更新 `lastTriggeredAt` 和 `suppressedCount`。
 
-### 智能建议 `Advice`
+### 大模型维修建议 `Advice`
 
 ```json
 {
@@ -582,7 +533,7 @@ HTTP 状态码建议：
 
 `POST /api/detection/results` 请求体：
 
-当前最小联调方案采用“Atlas 或边缘程序先保存图片，再上传可访问 URL”的方式。后端必须能访问 `imageUrl`、`annotatedImageUrl` 和仪表裁剪图 URL。若后续改为 multipart 上传，必须新增接口或更新 [API 端点规范](./api-spec.md)，不能在同一路径下混用两种请求格式。
+当前最小联调方案采用“Atlas 或边缘程序先保存图片，再上传可访问 URL”的方式。后端必须能访问 `imageUrl` 和 `annotatedImageUrl`。若后续改为 multipart 上传，必须新增接口或更新 [API 端点规范](./api-spec.md)，不能在同一路径下混用两种请求格式。
 
 ```json
 {
@@ -607,23 +558,11 @@ HTTP 状态码建议：
   "imageHeight": 720,
   "detections": [
     {
-      "category": "meter",
-      "deviceType": "meter",
-      "faultType": null,
-      "confidence": 0.96,
+      "category": "insulator_defect",
+      "deviceType": "insulator",
+      "faultType": "surface_damage",
+      "confidence": 0.91,
       "bbox": [120, 80, 360, 420]
-    }
-  ],
-  "meterReadings": [
-    {
-      "meterId": "device-001",
-      "meterType": "voltage_meter",
-      "value": 235.6,
-      "unit": "V",
-      "readingStatus": "normal",
-      "confidence": 0.89,
-      "rawText": "235.6",
-      "imageUrl": "/uploads/meter/inspection-20260616-0001/frame-000001-meter-001.jpg"
     }
   ],
   "performance": {
@@ -780,7 +719,6 @@ pending -> cancelled
 - 检测框；
 - 类别和置信度；
 - 设备识别结果；
-- 仪表读数、单位和状态；
 - 实时故障和风险等级；
 - FPS 和推理延迟；
 - 当前结果状态 `resultStatus`；
@@ -823,9 +761,8 @@ pending -> cancelled
 - 巡检时间；
 - 设备信息；
 - 检测结果；
-- 仪表读数；
 - 故障和告警；
-- 智能建议；
+- 大模型维修建议；
 - 报告状态；
 - 报告导出入口；
 - 导出生成中、失败和可下载状态。

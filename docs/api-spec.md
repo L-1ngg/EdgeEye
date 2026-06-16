@@ -29,8 +29,8 @@
 | `PATCH` | `/api/faults/:id/status` | 前端 | 更新故障处理状态 |
 | `PATCH` | `/api/alarms/:id/status` | 前端 | 更新告警处理状态 |
 | `GET` | `/api/dashboard` | 前端 | Dashboard 统计 |
-| `POST` | `/api/advice/generate` | 前端/后端 | 生成智能建议 |
-| `GET` | `/api/faults/:id/advice` | 前端 | 获取故障智能建议 |
+| `POST` | `/api/advice/generate` | 前端/后端 | 生成大模型维修建议 |
+| `GET` | `/api/faults/:id/advice` | 前端 | 获取故障维修建议 |
 | `GET` | `/api/reports` | 前端 | 报告列表 |
 | `GET` | `/api/reports/:id` | 前端 | 报告详情 |
 | `GET` | `/api/reports/:id/export` | 前端 | 报告导出 |
@@ -176,7 +176,6 @@
   "imageWidth": 1280,
   "imageHeight": 720,
   "detections": [],
-  "meterReadings": [],
   "faults": [],
   "performance": {
     "latencyMs": 42,
@@ -279,7 +278,7 @@
 | `pageSize` | 否 | 每页数量 |
 | `riskLevel` | 否 | 风险等级 |
 | `processStatus` | 否 | 处理状态 |
-| `adviceStatus` | 否 | 智能建议状态 |
+| `adviceStatus` | 否 | 维修建议状态 |
 
 响应 `data.items[]` 使用 [数据契约与接口规范](./contracts.md) 中的 `EventItem`。
 
@@ -342,7 +341,7 @@
 
 ## `POST /api/advice/generate`
 
-用于生成智能建议。
+用于生成大模型维修建议。
 
 请求：
 
@@ -370,7 +369,7 @@
 
 ## `GET /api/faults/:id/advice`
 
-用于获取已保存的智能建议。
+用于获取已保存的故障维修建议。
 
 响应 `data` 使用 [数据契约与接口规范](./contracts.md) 中的 `Advice`。
 
@@ -414,11 +413,10 @@
   "summary": "本次巡检发现 1 项高风险故障。",
   "device": {
     "deviceId": "device-001",
-    "deviceName": "1号线路电压表",
-    "deviceType": "meter",
+    "deviceName": "2号线路绝缘子",
+    "deviceType": "insulator",
     "location": "2号线路A相"
   },
-  "meterReadings": [],
   "faults": [],
   "alarms": [],
   "advices": [],
