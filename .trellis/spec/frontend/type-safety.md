@@ -6,46 +6,37 @@
 
 ## Overview
 
-<!--
-Document your project's type safety conventions here.
-
-Questions to answer:
-- What type system do you use?
-- How are types organized?
-- What validation library do you use?
-- How do you handle type inference?
--->
-
-(To be filled by the team)
+The frontend uses TypeScript in strict mode. API-facing types should mirror
+`docs/contracts.md` and remain centralized so pages do not redefine payload
+shapes.
 
 ---
 
 ## Type Organization
 
-<!-- Where types are defined, shared types vs local types -->
-
-(To be filled by the team)
+- Shared API and contract types live in `web/src/types/contracts.ts`.
+- Local component-only props can be defined in the component file.
+- Mock data in `web/src/data/` must import and satisfy the shared types.
 
 ---
 
 ## Validation
 
-<!-- Runtime validation patterns (Zod, Yup, io-ts, etc.) -->
-
-(To be filled by the team)
+- Runtime validation is not part of the initial skeleton.
+- When added, validation should live at the API client boundary, not inside every page.
 
 ---
 
 ## Common Patterns
 
-<!-- Type utilities, generics, type guards -->
-
-(To be filled by the team)
+- Use `ApiResponse<T>` for successful backend responses.
+- Keep enum-like strings as union types matching the docs, for example `RiskLevel` and `PageState`.
+- Use typed mock data as the fallback shape for unavailable backend endpoints.
 
 ---
 
 ## Forbidden Patterns
 
-<!-- any, type assertions, etc. -->
-
-(To be filled by the team)
+- Do not use `any` for API payloads.
+- Do not parse the same backend payload shape separately in multiple pages.
+- Do not let pages derive alarm severity from raw detections; consume backend-shaped event/dashboard data.

@@ -6,46 +6,45 @@
 
 ## Overview
 
-<!--
-Document your project's quality standards here.
-
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
+Frontend changes must keep the app buildable with Bun and preserve the
+documented API contract boundary.
 
 ---
 
 ## Forbidden Patterns
 
-<!-- Patterns that should never be used and why -->
-
-(To be filled by the team)
+- Do not call `fetch` directly from page components.
+- Do not duplicate API response types inside individual pages.
+- Do not commit `node_modules/`, `dist/`, or TypeScript build info files.
+- Do not create marketing/landing-page screens for the monitoring product.
 
 ---
 
 ## Required Patterns
 
-<!-- Patterns that must always be used -->
-
-(To be filled by the team)
+- Keep API calls in `web/src/api/`.
+- Keep shared API types in `web/src/types/`.
+- Keep reusable UI in `web/src/components/`.
+- Keep page-level composition in `web/src/pages/`.
 
 ---
 
 ## Testing Requirements
 
-<!-- What level of testing is expected -->
+- Run the frontend build before committing:
 
-(To be filled by the team)
+```bash
+cd web
+bun run build
+```
+
+- When end-to-end tests are added, cover Dashboard, realtime stale/no-frame states, fault advice fallback, and report export states.
 
 ---
 
 ## Code Review Checklist
 
-<!-- What reviewers should check -->
-
-(To be filled by the team)
+- Does the app still build with `bun run build`?
+- Are API-facing types centralized and aligned with `docs/contracts.md`?
+- Does UI remain usable at mobile widths?
+- Are generated files excluded by `.gitignore`?

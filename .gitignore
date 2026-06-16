@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+htmlcov/
+
+# Node / Vite
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example

@@ -37,3 +37,17 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 ---
 
 **Language**: All documentation should be written in **English**.
+
+## Current Stack
+
+- Language: TypeScript.
+- UI framework: React.
+- Build tool: Vite.
+- Package manager: Bun.
+- Styling: plain CSS in `src/styles/` for the initial skeleton.
+
+## Pre-Development Checklist
+
+- Read `directory-structure.md` before adding frontend modules.
+- Read `component-guidelines.md` and `type-safety.md` before adding views or API types.
+- Keep frontend API types aligned with `docs/contracts.md`.

@@ -6,49 +6,51 @@
 
 ## Overview
 
-<!--
-Document your project's frontend directory structure here.
-
-Questions to answer:
-- Where do components live?
-- How are features/modules organized?
-- Where are shared utilities?
-- How are assets organized?
--->
-
-(To be filled by the team)
+Frontend code lives in `web/` and uses React + Vite + TypeScript. The first
+screen is the operational dashboard shell, not a marketing page.
 
 ---
 
 ## Directory Layout
 
-```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
+```text
+web/
+├── src/
+│   ├── api/          # API client functions and fallback boundary
+│   ├── components/   # shared presentational components
+│   ├── data/         # typed demo/mock data
+│   ├── pages/        # page-level views
+│   ├── styles/       # global CSS
+│   └── types/        # TypeScript contract types
+├── package.json
+├── bun.lock
+└── vite.config.ts
 ```
 
 ---
 
 ## Module Organization
 
-<!-- How should new features be organized? -->
-
-(To be filled by the team)
+- Put reusable UI in `src/components/`.
+- Put full-page views in `src/pages/`.
+- Put API calls in `src/api/`; pages should not call `fetch` directly.
+- Put shared contract types in `src/types/`.
+- Put demo data in `src/data/` and keep it typed.
 
 ---
 
 ## Naming Conventions
 
-<!-- File and folder naming rules -->
-
-(To be filled by the team)
+- React component files use `PascalCase.tsx`.
+- Non-component modules use `camelCase.ts` or descriptive lowercase names.
+- API-facing TypeScript fields use `camelCase`.
+- Component props should be declared with named `interface` types.
 
 ---
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- `web/src/App.tsx`
+- `web/src/api/client.ts`
+- `web/src/types/contracts.ts`
+- `web/src/pages/DashboardPage.tsx`

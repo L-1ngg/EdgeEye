@@ -36,3 +36,17 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 ---
 
 **Language**: All documentation should be written in **English**.
+
+## Current Stack
+
+- Runtime: Python 3.11+.
+- Web framework: FastAPI.
+- Validation and response schemas: Pydantic.
+- Package/dependency workflow: `uv`.
+- Tests: `pytest` with FastAPI `TestClient`.
+
+## Pre-Development Checklist
+
+- Read `directory-structure.md` before adding backend modules.
+- Read `quality-guidelines.md` before adding or changing endpoints.
+- Keep API response fields aligned with `docs/contracts.md` and `docs/openapi.yaml`.

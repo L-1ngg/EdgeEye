@@ -6,49 +6,53 @@
 
 ## Overview
 
-<!--
-Document your project's backend directory structure here.
-
-Questions to answer:
-- How are modules/packages organized?
-- Where does business logic live?
-- Where are API endpoints defined?
-- How are utilities and helpers organized?
--->
-
-(To be filled by the team)
+Backend code lives in `backend/` and uses FastAPI. Keep route handlers thin:
+routes should validate HTTP input/output and call service functions; business
+logic and later database access should not be embedded directly in route files.
 
 ---
 
 ## Directory Layout
 
-```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
+```text
+backend/
+├── app/
+│   ├── main.py              # FastAPI app creation and middleware wiring
+│   ├── api/
+│   │   ├── router.py        # top-level /api router registration
+│   │   └── routes/          # route modules grouped by API domain
+│   ├── core/                # settings and app-wide helpers
+│   ├── models/              # Pydantic API models and shared enum literals
+│   └── services/            # business/demo data services
+├── tests/                   # pytest tests for API behavior
+├── pyproject.toml
+└── uv.lock
 ```
 
 ---
 
 ## Module Organization
 
-<!-- How should new features/modules be organized? -->
-
-(To be filled by the team)
+- Add new HTTP endpoints under `backend/app/api/routes/<domain>.py`.
+- Register route modules only in `backend/app/api/router.py`.
+- Put API request/response schemas in `backend/app/models/`.
+- Put implementation logic in `backend/app/services/` so it can later move from demo data to database-backed repositories without changing route signatures.
+- Keep shared enum-like strings in `backend/app/models/common.py`.
 
 ---
 
 ## Naming Conventions
 
-<!-- File and folder naming rules -->
-
-(To be filled by the team)
+- Python files and directories use `snake_case`.
+- JSON-facing Pydantic fields use `camelCase`, matching `docs/contracts.md`.
+- Route function names should describe the endpoint action, for example `get_system_status`.
+- Test files use `test_<domain>.py`.
 
 ---
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- `backend/app/api/routes/health.py`
+- `backend/app/api/routes/system.py`
+- `backend/app/models/system.py`
+- `backend/app/services/demo_data.py`

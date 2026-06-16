@@ -6,54 +6,44 @@
 
 ## Overview
 
-<!--
-Document your project's component conventions here.
-
-Questions to answer:
-- What component patterns do you use?
-- How are props defined?
-- How do you handle composition?
-- What accessibility standards apply?
--->
-
-(To be filled by the team)
+Components should support a monitoring/dashboard workflow. Favor dense,
+scannable operational UI over landing-page or marketing composition.
 
 ---
 
 ## Component Structure
 
-<!-- Standard structure of a component file -->
-
-(To be filled by the team)
+- Export named React components.
+- Keep shared components focused on presentation.
+- Keep page data assembly in page components or the app shell, not low-level components.
 
 ---
 
 ## Props Conventions
 
-<!-- How props should be defined and typed -->
-
-(To be filled by the team)
+- Use named `interface` declarations for component props.
+- Pass already-shaped contract data into page components.
+- Avoid `any` and avoid broad type assertions for API payloads.
 
 ---
 
 ## Styling Patterns
 
-<!-- How styles are applied (CSS modules, styled-components, Tailwind, etc.) -->
-
-(To be filled by the team)
+- Initial skeleton uses global CSS in `web/src/styles/global.css`.
+- Page sections should be unframed layout containers.
+- Use bordered cards for repeated information units such as metrics, rows, and status items.
 
 ---
 
 ## Accessibility
 
-<!-- A11y requirements and patterns -->
-
-(To be filled by the team)
+- Navigation controls must be real `button` elements or links.
+- Non-text visual placeholders should include an accessible label when meaningful.
+- Text must fit at mobile widths; prefer responsive grid changes over viewport-scaled font sizes.
 
 ---
 
 ## Common Mistakes
 
-<!-- Component-related mistakes your team has made -->
-
-(To be filled by the team)
+- Do not create a landing page when the task is to build the working app.
+- Do not put card-like page sections around other card-like UI elements.
