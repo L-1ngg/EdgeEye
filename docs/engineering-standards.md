@@ -1,0 +1,474 @@
+# 工程规范与联调标准
+
+## 目标
+
+本文档定义项目目录、命名、配置、日志、测试、交付和联调标准，用于保证 5 个成员的模块可以在两周内顺利集成。
+
+## 推荐仓库结构
+
+```text
+.
+├── docs/
+├── edge-app/
+├── camera/
+├── model-deploy/
+├── dataset/
+├── labels/
+├── training/
+├── meter-reader/
+├── rules/
+├── prompt-template/
+├── server/
+├── database/
+├── web/
+├── test-cases/
+├── demo-data/
+├── screenshots/
+└── reports/
+```
+
+说明：
+
+- `docs/` 存放项目文档和契约；
+- `edge-app/` 存放 Atlas 边缘端主程序；
+- `model-deploy/` 存放模型转换、部署脚本和板端模型；
+- `training/` 存放模型训练代码和配置；
+- `meter-reader/` 存放仪表识别代码；
+- `server/` 存放后端服务；
+- `web/` 存放前端应用；
+- `demo-data/` 存放演示用图片、视频和模拟接口数据；
+- `reports/` 存放评估报告、测试报告和最终巡检报告样例。
+
+## 文件命名规范
+
+### 图片和视频
+
+```text
+raw/{inspectionId}/{frameId}.jpg
+annotated/{inspectionId}/{frameId}.jpg
+meter/{inspectionId}/{frameId}-meter-{index}.jpg
+videos/demo-{date}-{scene}.mp4
+```
+
+示例：
+
+```text
+raw/inspection-20260616-0001/frame-000001.jpg
+annotated/inspection-20260616-0001/frame-000001.jpg
+meter/inspection-20260616-0001/frame-000001-meter-001.jpg
+```
+
+接口中的 URL 统一加 `/uploads/` 前缀，例如 `/uploads/raw/inspection-20260616-0001/frame-000001.jpg`。本节路径是存储目录相对路径。
+
+### 模型文件
+
+```text
+models/detector-v1.onnx
+models/detector-v1.om
+models/classes-v1.json
+models/preprocess-v1.json
+```
+
+### 规则文件
+
+```text
+rules/fault-rules.json
+rules/alarm-rules.json
+rules/meter-thresholds.json
+prompt-template/advice-template.md
+```
+
+## 配置规范
+
+各模块必须提供示例配置，不提交真实密钥。
+
+推荐文件：
+
+```text
+.env.example
+config/default.yaml
+config/local.example.yaml
+```
+
+关键配置项：
+
+| 配置项 | 说明 |
+| --- | --- |
+| `BACKEND_BASE_URL` | 后端接口地址 |
+| `CAMERA_SOURCE` | 摄像头编号、视频文件或 RTSP 地址 |
+| `MODEL_PATH` | 板端模型路径 |
+| `CLASSES_PATH` | 类别文件路径 |
+| `UPLOAD_IMAGE_DIR` | 图片保存目录 |
+| `EDGE_UPLOAD_MIN_INTERVAL_MS` | 正常状态关键帧最小上传间隔 |
+| `EDGE_FAULT_UPDATE_INTERVAL_MS` | 故障持续中证据帧最小上传间隔 |
+| `EDGE_FRAME_SIMILARITY_THRESHOLD` | 相似帧过滤阈值 |
+| `EDGE_QUEUE_MAX_ITEMS` | 边缘端本地待上传队列最大条数 |
+| `LLM_API_KEY` | 大模型密钥，仅后端使用 |
+| `LLM_MODEL` | 大模型名称 |
+
+## 日志规范
+
+日志至少包含：
+
+- 时间；
+- 模块名；
+- 日志等级；
+- 事件名称；
+- 关键 ID；
+- 错误信息。
+
+示例：
+
+```json
+{
+  "timestamp": "2026-06-16T10:00:00+08:00",
+  "level": "INFO",
+  "module": "edge-app",
+  "event": "detection_uploaded",
+  "inspectionId": "inspection-20260616-0001",
+  "frameId": "frame-000001",
+  "latencyMs": 42
+}
+```
+
+错误日志示例：
+
+```json
+{
+  "timestamp": "2026-06-16T10:00:00+08:00",
+  "level": "ERROR",
+  "module": "server",
+  "event": "advice_generation_failed",
+  "faultId": "fault-000001",
+  "error": "request timeout"
+}
+```
+
+## 数据集规范
+
+### 数据划分
+
+建议比例：
+
+- 训练集：70%;
+- 验证集：20%;
+- 测试集：10%。
+
+### 标注要求
+
+- 每张图片必须有唯一文件名；
+- 检测框只框住可见目标；
+- 小目标、遮挡和模糊样本需要在评估报告中单独说明；
+- 类别名称必须和 `classes.json` 一致；
+- 数据来源和样本数量必须记录在模型评估报告中。
+
+### `classes.json` 示例
+
+```json
+{
+  "version": "detector-v1",
+  "classes": [
+    {
+      "id": 0,
+      "name": "meter",
+      "type": "device"
+    },
+    {
+      "id": 1,
+      "name": "insulator",
+      "type": "device"
+    },
+    {
+      "id": 2,
+      "name": "surface_damage",
+      "type": "fault"
+    },
+    {
+      "id": 3,
+      "name": "smoke",
+      "type": "environment"
+    },
+    {
+      "id": 4,
+      "name": "person_intrusion",
+      "type": "environment"
+    },
+    {
+      "id": 5,
+      "name": "helmet_missing",
+      "type": "environment"
+    }
+  ]
+}
+```
+
+`type` 必须使用 [数据契约与接口规范](./contracts.md) 中的 `modelClassType` 枚举。`name` 必须能映射到 `deviceType` 或 `faultType`。
+`classes.json` 必须包含 `version`，后端和前端展示模型版本时使用该值。
+
+## 模型交付规范
+
+成员2交给成员1时必须包含：
+
+- ONNX 模型；
+- `classes.json`；
+- 输入尺寸；
+- 颜色通道顺序；
+- 归一化方式；
+- NMS 阈值；
+- 置信度阈值；
+- 一组测试图片；
+- 测试图片的期望输出。
+
+推荐 `preprocess-v1.json`：
+
+```json
+{
+  "inputWidth": 640,
+  "inputHeight": 640,
+  "colorFormat": "RGB",
+  "normalize": {
+    "mean": [0, 0, 0],
+    "std": [255, 255, 255]
+  },
+  "confidenceThreshold": 0.5,
+  "nmsThreshold": 0.45
+}
+```
+
+模型交付还必须提供一份 `expected-output-v1.json`，至少包含 5 张测试图的期望 `category`、`bbox`、`confidence` 范围和类别映射结果，用于成员1在 Atlas 转换后做一致性验证。
+
+## 边缘端上传策略
+
+边缘端必须实现关键帧上传，不能把视频流每帧都上传到后端。
+
+推荐默认值：
+
+| 项 | 默认值 |
+| --- | --- |
+| 正常状态上传间隔 | 1000 ms |
+| 故障持续中上传间隔 | 5000 ms |
+| 检测框相似 IoU 阈值 | 0.9 |
+| 仪表读数变化阈值 | 1 个最小业务单位 |
+| 本地队列容量 | 最近 1000 条或按磁盘空间配置 |
+
+上传流程：
+
+```text
+摄像头采集
+  ↓
+抽帧推理
+  ↓
+相似帧过滤
+  ↓
+生成关键帧 payload
+  ↓
+写入本地 outbox 队列
+  ↓
+后台上传
+  ↓
+收到 ACK 后标记已确认
+```
+
+边缘端本地队列至少包含：
+
+```json
+{
+  "idempotencyKey": "inspection-20260616-0001:frame-000001",
+  "inspectionId": "inspection-20260616-0001",
+  "frameId": "frame-000001",
+  "payloadPath": "queue/frame-000001.json",
+  "status": "pending",
+  "retryCount": 0,
+  "nextRetryAt": "2026-06-16T10:00:05+08:00",
+  "lastError": null
+}
+```
+
+重试建议使用指数退避，失败后进入 `pending` 等待下次上传；超过最大重试次数后保留为 `dead`，不得静默删除。
+
+## 规则文件规范
+
+### `meter-thresholds.json`
+
+```json
+{
+  "voltage_meter": {
+    "unit": "V",
+    "normalMin": 220,
+    "normalMax": 240,
+    "warningMin": 210,
+    "warningMax": 250
+  }
+}
+```
+
+判断规则：
+
+- `normalMin <= value <= normalMax`：`normal`；
+- `warningMin <= value < normalMin` 或 `normalMax < value <= warningMax`：`warning`；
+- 超出 `warningMin` 和 `warningMax`：`critical`；
+- OCR 失败：`failed`。
+
+### `fault-rules.json`
+
+```json
+{
+  "rules": [
+    {
+      "deviceType": "insulator",
+      "faultType": "surface_damage",
+      "minConfidence": 0.8,
+      "riskLevel": "high",
+      "alarmRequired": true,
+      "alarmLevel": "warning",
+      "priority": "P1"
+    }
+  ]
+}
+```
+
+### `alarm-rules.json`
+
+```json
+{
+  "dedupWindowSeconds": 300,
+  "rules": [
+    {
+      "riskLevel": "critical",
+      "alarmLevel": "critical",
+      "requireManualReview": true
+    },
+    {
+      "riskLevel": "high",
+      "alarmLevel": "warning",
+      "requireManualReview": true
+    },
+    {
+      "riskLevel": "medium",
+      "alarmLevel": "warning",
+      "requireManualReview": false
+    },
+    {
+      "riskLevel": "low",
+      "alarmLevel": "info",
+      "requireManualReview": false
+    }
+  ]
+}
+```
+
+告警去重默认键为 `deviceId + faultType + alarmLevel`。如需修改，必须同步更新 [数据契约与接口规范](./contracts.md) 和后端接口测试。
+去重命中时后端只更新 `lastTriggeredAt` 和 `suppressedCount`。
+
+## API 联调规范
+
+联调前成员4必须提供：
+
+- 后端启动命令；
+- `.env.example`；
+- API 基础地址；
+- 接口文档；
+- `docs/openapi.yaml` 或等价可校验契约；
+- 一份可直接导入的模拟数据；
+- 健康检查接口。
+
+建议健康检查：
+
+```text
+GET /api/health
+GET /api/system/status
+```
+
+`GET /api/health` 返回示例：
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "online",
+    "version": "0.1.0"
+  },
+  "message": "ok",
+  "timestamp": "2026-06-16T10:00:00+08:00"
+}
+```
+
+## 测试规范
+
+### 成员1边缘端测试
+
+- 摄像头读取测试；
+- 单帧推理测试；
+- 连续视频推理测试；
+- 后端上传测试；
+- 断网或后端不可用测试；
+- 30 分钟连续运行测试。
+
+### 成员2模型测试
+
+- 每类目标至少提供 5 张测试样例；
+- 记录误报样例；
+- 记录漏报样例；
+- 输出推荐阈值；
+- 验证 ONNX 推理结果。
+
+### 成员3专项算法测试
+
+- 正常读数样例；
+- 预警读数样例；
+- 异常读数样例；
+- OCR 失败样例；
+- 低置信度样例；
+- 故障规则触发样例；
+- 智能建议输出格式测试。
+
+### 成员4接口测试
+
+- 检测结果上传成功；
+- 重复上传返回幂等 ACK；
+- 同一故障多帧聚合为一个事件；
+- 告警去重窗口命中；
+- 缺失字段返回错误；
+- 故障和告警生成；
+- 故障和告警处理状态更新；
+- 智能建议生成；
+- Dashboard 统计；
+- 报告生成和导出。
+
+### 成员5前端测试
+
+- Dashboard 正常状态；
+- Dashboard 异常状态；
+- 实时巡检展示检测框；
+- 实时巡检展示关键帧、过期态和无帧态；
+- 实时巡检展示仪表读数；
+- 故障中心展示聚合事件；
+- 故障中心展示智能建议；
+- 报告中心展示报告生成中、导出成功和导出失败；
+- 后端接口失败时页面有明确提示。
+
+## 联调准入清单
+
+进入第 6-7 天联调前必须具备：
+
+- 成员1可以读取摄像头或测试视频；
+- 成员2提供第一版 ONNX 模型和 `classes.json`；
+- 成员3提供至少一个固定仪表图片识别结果；
+- 成员4提供 `POST /api/detection/results`；
+- 成员5提供实时巡检页面；
+- 全组使用同一份数据契约。
+
+## 最终验收清单
+
+最终演示前必须确认：
+
+- 摄像头或备用视频可用；
+- Atlas 或备用推理脚本可运行；
+- 后端服务可启动；
+- 前端页面可访问；
+- Dashboard 有统计和系统状态；
+- 实时巡检有检测框、设备结果和仪表读数；
+- 故障中心有故障、告警和智能建议；
+- 报告中心有报告；
+- 有备用图片、视频和模拟数据；
+- 有操作文档和答辩 PPT。

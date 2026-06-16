@@ -1,0 +1,1657 @@
+openapi: 3.0.3
+info:
+  title: Electric Inspection System API
+  version: 0.1.0
+  license:
+    name: Internal Project
+    url: https://spdx.org/licenses/
+servers:
+  - url: /
+security: []
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      responses:
+        "200":
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/system/status:
+    get:
+      operationId: getSystemStatus
+      summary: System overview
+      responses:
+        "200":
+          description: System status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SystemOverview"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/inspection/start:
+    post:
+      operationId: startInspection
+      summary: Start inspection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartInspectionRequest"
+      responses:
+        "200":
+          description: Inspection started
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InspectionStatusResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/inspections/{id}/finish:
+    post:
+      operationId: finishInspection
+      summary: Finish inspection
+      parameters:
+        - $ref: "#/components/parameters/InspectionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishInspectionRequest"
+      responses:
+        "200":
+          description: Inspection completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InspectionStatusResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/inspections/{id}/fail:
+    post:
+      operationId: failInspection
+      summary: Mark inspection as failed
+      parameters:
+        - $ref: "#/components/parameters/InspectionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FailInspectionRequest"
+      responses:
+        "200":
+          description: Inspection failed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InspectionStatusResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/inspections:
+    get:
+      operationId: listInspections
+      summary: List inspections
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/InspectionStatus"
+        - name: deviceId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Inspection list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/InspectionListItem"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/inspections/{id}/latest-result:
+    get:
+      operationId: getLatestInspectionResult
+      summary: Latest inspection result
+      parameters:
+        - $ref: "#/components/parameters/InspectionId"
+      responses:
+        "200":
+          description: Latest result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/LatestInspectionResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/detection/results:
+    post:
+      operationId: uploadDetectionResult
+      summary: Upload detection result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectionUploadRequest"
+      responses:
+        "200":
+          description: Detection result saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DetectionUploadResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/devices:
+    get:
+      operationId: listDevices
+      summary: List devices
+      parameters:
+        - name: deviceType
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeviceType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SystemStatus"
+      responses:
+        "200":
+          description: Device list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/faults:
+    get:
+      operationId: listFaults
+      summary: List faults
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: riskLevel
+          in: query
+          schema:
+            $ref: "#/components/schemas/RiskLevel"
+        - name: processStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProcessStatus"
+        - name: deviceId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fault list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Fault"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/alarms:
+    get:
+      operationId: listAlarms
+      summary: List alarms
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: alarmLevel
+          in: query
+          schema:
+            $ref: "#/components/schemas/AlarmLevel"
+        - name: processStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProcessStatus"
+      responses:
+        "200":
+          description: Alarm list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Alarm"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/events:
+    get:
+      operationId: listEvents
+      summary: List aggregated fault center events
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: riskLevel
+          in: query
+          schema:
+            $ref: "#/components/schemas/RiskLevel"
+        - name: processStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProcessStatus"
+        - name: adviceStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/AdviceStatus"
+      responses:
+        "200":
+          description: Event list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/EventItem"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/faults/{id}/status:
+    patch:
+      operationId: updateFaultStatus
+      summary: Update fault process status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProcessStatusRequest"
+      responses:
+        "200":
+          description: Fault
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Fault"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/alarms/{id}/status:
+    patch:
+      operationId: updateAlarmStatus
+      summary: Update alarm process status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProcessStatusRequest"
+      responses:
+        "200":
+          description: Alarm
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Alarm"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/dashboard:
+    get:
+      operationId: getDashboard
+      summary: Dashboard statistics
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Dashboard"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/advice/generate:
+    post:
+      operationId: generateAdvice
+      summary: Generate advice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - faultId
+              properties:
+                faultId:
+                  type: string
+                  example: fault-000001
+      responses:
+        "200":
+          description: Advice
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Advice"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/faults/{id}/advice:
+    get:
+      operationId: getFaultAdvice
+      summary: Get advice by fault
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Advice
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Advice"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/reports:
+    get:
+      operationId: listReports
+      summary: List reports
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: inspectionId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/PageResult"
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ReportListItem"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/reports/{id}:
+    get:
+      operationId: getReport
+      summary: Report detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDetail"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/reports/{id}/export:
+    get:
+      operationId: exportReport
+      summary: Export report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum:
+              - html
+              - pdf
+            default: html
+      responses:
+        "200":
+          description: Report export
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportExport"
+        "400":
+          $ref: "#/components/responses/Error"
+components:
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  parameters:
+    InspectionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  schemas:
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        data: {}
+        message:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - NOT_FOUND
+                - UPLOAD_FAILED
+                - MODEL_RESULT_INVALID
+                - ADVICE_GENERATION_FAILED
+                - SERVICE_UNAVAILABLE
+                - DUPLICATE_UPLOAD
+                - IDEMPOTENCY_CONFLICT
+                - INSPECTION_NOT_RUNNING
+                - INVALID_STATE_TRANSITION
+                - RESULT_NOT_READY
+                - RESULT_STALE
+                - ADVICE_NOT_READY
+                - REPORT_GENERATING
+                - REPORT_EXPORT_FAILED
+                - UPSTREAM_TIMEOUT
+                - INTERNAL_ERROR
+            message:
+              type: string
+            details:
+              type: object
+        timestamp:
+          type: string
+          format: date-time
+    HealthResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required:
+                - status
+                - version
+              properties:
+                status:
+                  $ref: "#/components/schemas/SystemStatus"
+                version:
+                  type: string
+    DeviceType:
+      type: string
+      enum:
+        - meter
+        - insulator
+        - transformer
+        - switchgear
+        - circuit_breaker
+        - unknown
+    FaultType:
+      type: string
+      enum:
+        - surface_damage
+        - rust
+        - foreign_object
+        - smoke
+        - fire
+        - meter_over_limit
+        - meter_read_failed
+        - person_intrusion
+        - helmet_missing
+        - unknown
+    MeterType:
+      type: string
+      enum:
+        - voltage_meter
+        - current_meter
+        - pressure_meter
+        - unknown
+    ReadingStatus:
+      type: string
+      enum:
+        - normal
+        - warning
+        - critical
+        - unknown
+        - failed
+    RiskLevel:
+      type: string
+      enum:
+        - none
+        - low
+        - medium
+        - high
+        - critical
+    AlarmLevel:
+      type: string
+      enum:
+        - info
+        - warning
+        - critical
+    ProcessStatus:
+      type: string
+      enum:
+        - pending
+        - processing
+        - resolved
+        - ignored
+    SystemStatus:
+      type: string
+      enum:
+        - online
+        - offline
+        - degraded
+        - error
+        - unknown
+    InspectionStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+    InspectionSource:
+      type: string
+      enum:
+        - atlas
+        - web
+        - mock
+    Priority:
+      type: string
+      enum:
+        - P0
+        - P1
+        - P2
+        - P3
+    UploadReason:
+      type: string
+      enum:
+        - periodic_sample
+        - fault_started
+        - fault_updated
+        - fault_resolved
+        - meter_status_changed
+        - manual_capture
+        - system_event
+    ResultStatus:
+      type: string
+      enum:
+        - ready
+        - processing
+        - stale
+        - no_frame
+        - failed
+    EventStatus:
+      type: string
+      enum:
+        - new
+        - ongoing
+        - resolved
+    AdviceStatus:
+      type: string
+      enum:
+        - none
+        - generating
+        - ready
+        - fallback
+        - failed
+    ReportStatus:
+      type: string
+      enum:
+        - pending
+        - generating
+        - ready
+        - failed
+    DataFreshness:
+      type: string
+      enum:
+        - fresh
+        - stale
+        - offline
+    PageState:
+      type: string
+      enum:
+        - loading
+        - ready
+        - empty
+        - stale
+        - partial_error
+        - error
+    ReportFormat:
+      type: string
+      enum:
+        - html
+        - pdf
+    ExportStatus:
+      type: string
+      enum:
+        - ready
+        - generating
+        - failed
+    BBox:
+      type: array
+      minItems: 4
+      maxItems: 4
+      items:
+        type: integer
+        minimum: 0
+      example:
+        - 120
+        - 80
+        - 360
+        - 420
+    Device:
+      type: object
+      required:
+        - deviceId
+        - deviceName
+        - deviceType
+        - location
+        - status
+      properties:
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        deviceType:
+          $ref: "#/components/schemas/DeviceType"
+        location:
+          type: string
+        status:
+          $ref: "#/components/schemas/SystemStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    StartInspectionRequest:
+      type: object
+      required:
+        - deviceId
+        - operator
+        - source
+      properties:
+        deviceId:
+          type: string
+        operator:
+          type: string
+        source:
+          $ref: "#/components/schemas/InspectionSource"
+    FinishInspectionRequest:
+      type: object
+      properties:
+        endedAt:
+          type: string
+          format: date-time
+        summary:
+          type: string
+    FailInspectionRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        endedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+    InspectionStatusResult:
+      type: object
+      required:
+        - inspectionId
+        - status
+      properties:
+        inspectionId:
+          type: string
+        status:
+          $ref: "#/components/schemas/InspectionStatus"
+        endedAt:
+          type: string
+          nullable: true
+          format: date-time
+    InspectionListItem:
+      type: object
+      properties:
+        inspectionId:
+          type: string
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        status:
+          $ref: "#/components/schemas/InspectionStatus"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          nullable: true
+          format: date-time
+        faultCount:
+          type: integer
+          minimum: 0
+        alarmCount:
+          type: integer
+          minimum: 0
+    Detection:
+      type: object
+      required:
+        - category
+        - confidence
+        - bbox
+      properties:
+        detectionId:
+          type: string
+          readOnly: true
+        category:
+          type: string
+        deviceType:
+          type: string
+          nullable: true
+          enum:
+            - meter
+            - insulator
+            - transformer
+            - switchgear
+            - circuit_breaker
+            - unknown
+        faultType:
+          type: string
+          nullable: true
+          enum:
+            - surface_damage
+            - rust
+            - foreign_object
+            - smoke
+            - fire
+            - meter_over_limit
+            - meter_read_failed
+            - person_intrusion
+            - helmet_missing
+            - unknown
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        bbox:
+          $ref: "#/components/schemas/BBox"
+        imageWidth:
+          type: integer
+          minimum: 1
+        imageHeight:
+          type: integer
+          minimum: 1
+    MeterReading:
+      type: object
+      required:
+        - meterId
+        - meterType
+        - value
+        - unit
+        - readingStatus
+        - confidence
+        - rawText
+        - imageUrl
+      properties:
+        meterId:
+          type: string
+        meterType:
+          $ref: "#/components/schemas/MeterType"
+        value:
+          type: number
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        readingStatus:
+          $ref: "#/components/schemas/ReadingStatus"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        rawText:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+    Fault:
+      type: object
+      required:
+        - faultId
+        - inspectionId
+        - deviceId
+        - deviceType
+        - faultType
+        - confidence
+        - riskLevel
+        - alarmRequired
+        - alarmLevel
+        - priority
+        - processStatus
+        - eventKey
+        - eventStatus
+        - firstSeenAt
+        - lastSeenAt
+        - occurrenceCount
+        - createdAt
+      properties:
+        faultId:
+          type: string
+        inspectionId:
+          type: string
+        deviceId:
+          type: string
+        deviceType:
+          $ref: "#/components/schemas/DeviceType"
+        faultType:
+          $ref: "#/components/schemas/FaultType"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        riskLevel:
+          $ref: "#/components/schemas/RiskLevel"
+        alarmRequired:
+          type: boolean
+        alarmLevel:
+          $ref: "#/components/schemas/AlarmLevel"
+        priority:
+          $ref: "#/components/schemas/Priority"
+        processStatus:
+          $ref: "#/components/schemas/ProcessStatus"
+        eventKey:
+          type: string
+        eventStatus:
+          $ref: "#/components/schemas/EventStatus"
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        occurrenceCount:
+          type: integer
+          minimum: 1
+        lastConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        maxConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        bestFrameId:
+          type: string
+        bestImageUrl:
+          type: string
+        bestAnnotatedImageUrl:
+          type: string
+        location:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Alarm:
+      type: object
+      required:
+        - alarmId
+        - faultId
+        - deviceId
+        - alarmLevel
+        - riskLevel
+        - message
+        - processStatus
+        - dedupKey
+        - firstTriggeredAt
+        - lastTriggeredAt
+        - suppressedCount
+        - createdAt
+      properties:
+        alarmId:
+          type: string
+        faultId:
+          type: string
+        deviceId:
+          type: string
+        alarmLevel:
+          $ref: "#/components/schemas/AlarmLevel"
+        riskLevel:
+          $ref: "#/components/schemas/RiskLevel"
+        message:
+          type: string
+        processStatus:
+          $ref: "#/components/schemas/ProcessStatus"
+        dedupKey:
+          type: string
+        firstTriggeredAt:
+          type: string
+          format: date-time
+        lastTriggeredAt:
+          type: string
+          format: date-time
+        suppressedCount:
+          type: integer
+          minimum: 0
+        reopenCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    Advice:
+      type: object
+      required:
+        - adviceId
+        - faultId
+        - possibleCauses
+        - riskAnalysis
+        - inspectionSteps
+        - maintenanceSuggestions
+        - safetyNotes
+        - modelName
+        - adviceStatus
+        - createdAt
+      properties:
+        adviceId:
+          type: string
+        faultId:
+          type: string
+        possibleCauses:
+          type: array
+          items:
+            type: string
+        riskAnalysis:
+          type: string
+        inspectionSteps:
+          type: array
+          items:
+            type: string
+        maintenanceSuggestions:
+          type: array
+          items:
+            type: string
+        safetyNotes:
+          type: array
+          items:
+            type: string
+        modelName:
+          type: string
+        adviceStatus:
+          $ref: "#/components/schemas/AdviceStatus"
+        createdAt:
+          type: string
+          format: date-time
+    Performance:
+      type: object
+      properties:
+        latencyMs:
+          type: number
+          minimum: 0
+        fps:
+          type: number
+          minimum: 0
+        cpuUsage:
+          type: number
+          minimum: 0
+          maximum: 100
+        memoryUsage:
+          type: number
+          minimum: 0
+          maximum: 100
+        npuUsage:
+          type: number
+          minimum: 0
+          maximum: 100
+    SampleWindow:
+      type: object
+      required:
+        - startedAt
+        - endedAt
+        - frameCount
+      properties:
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        frameCount:
+          type: integer
+          minimum: 1
+    DetectionUploadRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - idempotencyKey
+        - inspectionId
+        - frameId
+        - timestamp
+        - isKeyFrame
+        - uploadReason
+        - imageUrl
+        - imageWidth
+        - imageHeight
+        - detections
+        - meterReadings
+        - performance
+      properties:
+        idempotencyKey:
+          type: string
+        inspectionId:
+          type: string
+        frameId:
+          type: string
+        frameSeq:
+          type: integer
+          minimum: 1
+        timestamp:
+          type: string
+          format: date-time
+        receivedAt:
+          type: string
+          format: date-time
+        deviceId:
+          type: string
+          nullable: true
+        isKeyFrame:
+          type: boolean
+        uploadReason:
+          $ref: "#/components/schemas/UploadReason"
+        eventKey:
+          type: string
+          nullable: true
+        sampleWindow:
+          $ref: "#/components/schemas/SampleWindow"
+        imageUrl:
+          type: string
+        annotatedImageUrl:
+          type: string
+          nullable: true
+        imageWidth:
+          type: integer
+          minimum: 1
+        imageHeight:
+          type: integer
+          minimum: 1
+        detections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Detection"
+        meterReadings:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeterReading"
+        performance:
+          $ref: "#/components/schemas/Performance"
+    DetectionUploadResult:
+      type: object
+      required:
+        - resultId
+        - inspectionId
+        - frameId
+        - accepted
+        - duplicate
+        - processedAt
+        - inspectionStatus
+        - faultsCreated
+        - faultsUpdated
+        - alarmsCreated
+        - alarmsSuppressed
+        - reportTriggered
+        - warnings
+      properties:
+        resultId:
+          type: string
+        inspectionId:
+          type: string
+        frameId:
+          type: string
+        accepted:
+          type: boolean
+        duplicate:
+          type: boolean
+        processedAt:
+          type: string
+          format: date-time
+        inspectionStatus:
+          $ref: "#/components/schemas/InspectionStatus"
+        faultsCreated:
+          type: integer
+          minimum: 0
+        faultsUpdated:
+          type: integer
+          minimum: 0
+        alarmsCreated:
+          type: integer
+          minimum: 0
+        alarmsSuppressed:
+          type: integer
+          minimum: 0
+        reportTriggered:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+    LatestInspectionResult:
+      allOf:
+        - $ref: "#/components/schemas/DetectionUploadRequest"
+        - type: object
+          required:
+            - inspectionStatus
+            - resultStatus
+          properties:
+            inspectionStatus:
+              $ref: "#/components/schemas/InspectionStatus"
+            resultStatus:
+              $ref: "#/components/schemas/ResultStatus"
+            staleAfterMs:
+              type: integer
+              minimum: 0
+            eventStatus:
+              type: string
+              nullable: true
+              enum:
+                - new
+                - ongoing
+                - resolved
+            faults:
+              type: array
+              items:
+                $ref: "#/components/schemas/Fault"
+    SystemOverview:
+      type: object
+      properties:
+        camera:
+          $ref: "#/components/schemas/SubsystemStatus"
+        atlas:
+          $ref: "#/components/schemas/AtlasStatus"
+        model:
+          $ref: "#/components/schemas/ModelStatus"
+        backend:
+          $ref: "#/components/schemas/SubsystemStatus"
+        updatedAt:
+          type: string
+          format: date-time
+        dataFreshness:
+          $ref: "#/components/schemas/DataFreshness"
+        activeInspectionCount:
+          type: integer
+          minimum: 0
+        unresolvedFaultCount:
+          type: integer
+          minimum: 0
+        unresolvedAlarmCount:
+          type: integer
+          minimum: 0
+    SubsystemStatus:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/SystemStatus"
+        lastFrameAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastHeartbeatAt:
+          type: string
+          nullable: true
+          format: date-time
+        message:
+          type: string
+          nullable: true
+        degradedReason:
+          type: string
+          nullable: true
+    AtlasStatus:
+      allOf:
+        - $ref: "#/components/schemas/SubsystemStatus"
+        - type: object
+          properties:
+            cpuUsage:
+              type: number
+            memoryUsage:
+              type: number
+            npuUsage:
+              type: number
+    ModelStatus:
+      allOf:
+        - $ref: "#/components/schemas/SubsystemStatus"
+        - type: object
+          properties:
+            modelVersion:
+              type: string
+            fps:
+              type: number
+            latencyMs:
+              type: number
+    Dashboard:
+      type: object
+      properties:
+        deviceCount:
+          type: integer
+          minimum: 0
+        inspectionCount:
+          type: integer
+          minimum: 0
+        faultCount:
+          type: integer
+          minimum: 0
+        alarmCount:
+          type: integer
+          minimum: 0
+        criticalAlarmCount:
+          type: integer
+          minimum: 0
+        activeInspectionCount:
+          type: integer
+          minimum: 0
+        unresolvedFaultCount:
+          type: integer
+          minimum: 0
+        unresolvedAlarmCount:
+          type: integer
+          minimum: 0
+        dataFreshness:
+          $ref: "#/components/schemas/DataFreshness"
+        pageState:
+          $ref: "#/components/schemas/PageState"
+        latestInspectionAt:
+          type: string
+          nullable: true
+          format: date-time
+        latestHighRiskAlarm:
+          type: object
+          nullable: true
+          properties:
+            alarmId:
+              type: string
+            faultId:
+              type: string
+            inspectionId:
+              type: string
+            deviceId:
+              type: string
+            deviceName:
+              type: string
+            faultType:
+              $ref: "#/components/schemas/FaultType"
+            riskLevel:
+              $ref: "#/components/schemas/RiskLevel"
+            alarmLevel:
+              $ref: "#/components/schemas/AlarmLevel"
+            processStatus:
+              $ref: "#/components/schemas/ProcessStatus"
+            createdAt:
+              type: string
+              format: date-time
+    EventItem:
+      type: object
+      required:
+        - eventId
+        - eventType
+        - inspectionId
+        - deviceId
+        - faultType
+        - riskLevel
+        - processStatus
+        - occurrenceCount
+        - firstOccurredAt
+        - lastOccurredAt
+        - adviceStatus
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+          enum:
+            - fault
+            - alarm
+            - meter_exception
+            - system_exception
+        inspectionId:
+          type: string
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        faultId:
+          type: string
+        alarmId:
+          type: string
+        faultType:
+          $ref: "#/components/schemas/FaultType"
+        riskLevel:
+          $ref: "#/components/schemas/RiskLevel"
+        alarmLevel:
+          type: string
+          nullable: true
+          enum:
+            - info
+            - warning
+            - critical
+        processStatus:
+          $ref: "#/components/schemas/ProcessStatus"
+        title:
+          type: string
+        summary:
+          type: string
+        occurrenceCount:
+          type: integer
+          minimum: 1
+        firstOccurredAt:
+          type: string
+          format: date-time
+        lastOccurredAt:
+          type: string
+          format: date-time
+        latestFrameId:
+          type: string
+        latestImageUrl:
+          type: string
+        adviceStatus:
+          $ref: "#/components/schemas/AdviceStatus"
+    UpdateProcessStatusRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - processStatus
+        - operator
+      properties:
+        processStatus:
+          $ref: "#/components/schemas/ProcessStatus"
+        operator:
+          type: string
+        note:
+          type: string
+    PageResult:
+      type: object
+      required:
+        - items
+        - total
+        - page
+        - pageSize
+      properties:
+        items:
+          type: array
+          items: {}
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+    ReportListItem:
+      type: object
+      properties:
+        reportId:
+          type: string
+        inspectionId:
+          type: string
+        title:
+          type: string
+        reportStatus:
+          $ref: "#/components/schemas/ReportStatus"
+        createdAt:
+          type: string
+          format: date-time
+        format:
+          $ref: "#/components/schemas/ReportFormat"
+        url:
+          type: string
+    ReportExport:
+      type: object
+      required:
+        - format
+        - exportStatus
+      properties:
+        format:
+          $ref: "#/components/schemas/ReportFormat"
+        exportStatus:
+          $ref: "#/components/schemas/ExportStatus"
+        downloadUrl:
+          type: string
+          nullable: true
+        fileName:
+          type: string
+          nullable: true
+        generatedAt:
+          type: string
+          nullable: true
+          format: date-time
+        expiresAt:
+          type: string
+          nullable: true
+          format: date-time
+    ReportDetail:
+      allOf:
+        - $ref: "#/components/schemas/ReportListItem"
+        - type: object
+          properties:
+            summary:
+              type: string
+            device:
+              $ref: "#/components/schemas/Device"
+            meterReadings:
+              type: array
+              items:
+                $ref: "#/components/schemas/MeterReading"
+            faults:
+              type: array
+              items:
+                $ref: "#/components/schemas/Fault"
+            alarms:
+              type: array
+              items:
+                $ref: "#/components/schemas/Alarm"
+            advices:
+              type: array
+              items:
+                $ref: "#/components/schemas/Advice"
+            exports:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportExport"
