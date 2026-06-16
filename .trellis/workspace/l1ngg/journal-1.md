@@ -37,3 +37,36 @@ Created FastAPI backend and React/Vite frontend skeletons, added run docs, tests
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Implement member4 backend services
+
+**Date**: 2026-06-17
+**Task**: Implement member4 backend services
+**Branch**: `main`
+
+### Summary
+
+Implemented member 4 backend persistence, detection upload, fault and alarm aggregation, advice fallback, report APIs, frontend API wiring, and verification tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32e4d03` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
