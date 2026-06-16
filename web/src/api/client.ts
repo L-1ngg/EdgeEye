@@ -1,4 +1,5 @@
 import {
+  mockAdvice,
   mockDashboard,
   mockEvents,
   mockRealtimeSnapshot,
@@ -9,6 +10,9 @@ import type {
   ApiResponse,
   Dashboard,
   EventItem,
+  InspectionListItem,
+  PageResult,
+  RepairAdvice,
   ReportSummary,
   RealtimeSnapshot,
   SystemOverview
@@ -23,6 +27,11 @@ async function getJson<T>(path: string): Promise<T> {
   }
   const body = (await response.json()) as ApiResponse<T>;
   return body.data;
+}
+
+async function getPageItems<T>(path: string): Promise<T[]> {
+  const page = await getJson<PageResult<T>>(path);
+  return page.items;
 }
 
 export async function getDashboard(): Promise<Dashboard> {
@@ -42,13 +51,52 @@ export async function getSystemOverview(): Promise<SystemOverview> {
 }
 
 export async function getRealtimeSnapshot(): Promise<RealtimeSnapshot> {
-  return mockRealtimeSnapshot;
+  try {
+    const inspections = await getPageItems<InspectionListItem>("/inspections?pageSize=1");
+    const inspectionId = inspections[0]?.inspectionId ?? mockRealtimeSnapshot.inspectionId;
+    return await getJson<RealtimeSnapshot>(`/inspections/${inspectionId}/latest-result`);
+  } catch {
+    return mockRealtimeSnapshot;
+  }
 }
 
 export async function getEvents(): Promise<EventItem[]> {
-  return mockEvents;
+  try {
+    return await getPageItems<EventItem>("/events");
+  } catch {
+    return mockEvents;
+  }
 }
 
 export async function getReports(): Promise<ReportSummary[]> {
-  return mockReports;
+  try {
+    return await getPageItems<ReportSummary>("/reports");
+  } catch {
+    return mockReports;
+  }
+}
+
+export async function getAdvice(faultId: string | null | undefined): Promise<RepairAdvice> {
+  if (!faultId) {
+    return mockAdvice;
+  }
+
+  try {
+    return await getJson<RepairAdvice>(`/faults/${faultId}/advice`);
+  } catch {
+    try {
+      const response = await fetch(`${API_BASE_URL}/advice/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ faultId })
+      });
+      if (!response.ok) {
+        return mockAdvice;
+      }
+      const body = (await response.json()) as ApiResponse<RepairAdvice>;
+      return body.data;
+    } catch {
+      return mockAdvice;
+    }
+  }
 }

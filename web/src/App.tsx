@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getDashboard, getEvents, getRealtimeSnapshot, getReports, getSystemOverview } from "./api/client";
+import { getAdvice, getDashboard, getEvents, getRealtimeSnapshot, getReports, getSystemOverview } from "./api/client";
 import { mockAdvice, mockDashboard, mockEvents, mockRealtimeSnapshot, mockReports, mockSystemOverview } from "./data/mockData";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FaultCenterPage } from "./pages/FaultCenterPage";
@@ -23,6 +23,7 @@ export function App() {
   const [system, setSystem] = useState<SystemOverview>(mockSystemOverview);
   const [snapshot, setSnapshot] = useState<RealtimeSnapshot>(mockRealtimeSnapshot);
   const [events, setEvents] = useState<EventItem[]>(mockEvents);
+  const [advice, setAdvice] = useState(mockAdvice);
   const [reports, setReports] = useState<ReportSummary[]>(mockReports);
   const [apiMode, setApiMode] = useState<"api" | "mock">("mock");
 
@@ -37,6 +38,7 @@ export function App() {
         getEvents(),
         getReports()
       ]);
+      const adviceData = await getAdvice(eventData[0]?.faultId);
 
       if (cancelled) {
         return;
@@ -46,6 +48,7 @@ export function App() {
       setSystem(systemData);
       setSnapshot(snapshotData);
       setEvents(eventData);
+      setAdvice(adviceData);
       setReports(reportData);
       setApiMode(dashboardData === mockDashboard ? "mock" : "api");
     }
@@ -64,13 +67,13 @@ export function App() {
       case "realtime":
         return <RealtimePage snapshot={snapshot} />;
       case "faults":
-        return <FaultCenterPage advice={mockAdvice} events={events} />;
+        return <FaultCenterPage advice={advice} events={events} />;
       case "reports":
         return <ReportsPage reports={reports} />;
       default:
         return <DashboardPage dashboard={dashboard} system={system} />;
     }
-  }, [activeView, dashboard, events, reports, snapshot, system]);
+  }, [activeView, advice, dashboard, events, reports, snapshot, system]);
 
   return (
     <main className="app-shell">

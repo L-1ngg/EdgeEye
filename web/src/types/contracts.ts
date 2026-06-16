@@ -6,12 +6,20 @@ export type AlarmLevel = "info" | "warning" | "critical";
 export type ProcessStatus = "pending" | "processing" | "resolved" | "ignored";
 export type AdviceStatus = "none" | "generating" | "ready" | "fallback" | "failed";
 export type ReportStatus = "pending" | "generating" | "ready" | "failed";
+export type ReportFormat = "html" | "pdf";
 
 export interface ApiResponse<T> {
   success: true;
   data: T;
   message: string;
   timestamp: string;
+}
+
+export interface PageResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface SubsystemStatus {
@@ -75,14 +83,21 @@ export interface Dashboard {
 }
 
 export interface RealtimeSnapshot {
+  idempotencyKey?: string;
   inspectionId: string;
   inspectionStatus: string;
   resultStatus: "ready" | "processing" | "stale" | "no_frame" | "failed";
   frameId: string;
   frameSeq: number;
   timestamp: string;
+  receivedAt?: string | null;
+  staleAfterMs?: number;
   isKeyFrame: boolean;
   uploadReason: string;
+  eventKey?: string | null;
+  eventStatus?: string | null;
+  imageUrl?: string;
+  annotatedImageUrl?: string | null;
   imageWidth: number;
   imageHeight: number;
   detections: Array<{
@@ -100,6 +115,7 @@ export interface RealtimeSnapshot {
     memoryUsage: number;
     npuUsage: number;
   };
+  faults?: unknown[];
 }
 
 export interface EventItem {
@@ -109,7 +125,7 @@ export interface EventItem {
   deviceId: string;
   deviceName: string;
   faultId: string;
-  alarmId: string;
+  alarmId: string | null;
   faultType: string;
   riskLevel: RiskLevel;
   alarmLevel: AlarmLevel;
@@ -133,6 +149,7 @@ export interface RepairAdvice {
   maintenanceSuggestions: string[];
   safetyNotes: string[];
   modelName: string;
+  adviceStatus: AdviceStatus;
   createdAt: string;
 }
 
@@ -140,8 +157,19 @@ export interface ReportSummary {
   reportId: string;
   inspectionId: string;
   title: string;
-  status: ReportStatus;
-  format: "pdf" | "html" | "docx";
-  generatedAt: string | null;
-  downloadUrl: string | null;
+  reportStatus: ReportStatus;
+  format: ReportFormat;
+  createdAt: string;
+  url: string;
+}
+
+export interface InspectionListItem {
+  inspectionId: string;
+  deviceId: string;
+  deviceName: string;
+  status: string;
+  startedAt: string;
+  endedAt: string | null;
+  faultCount: number;
+  alarmCount: number;
 }

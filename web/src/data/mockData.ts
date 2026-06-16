@@ -137,6 +137,7 @@ export const mockAdvice: RepairAdvice = {
   maintenanceSuggestions: ["安排专业人员复检", "必要时更换绝缘子"],
   safetyNotes: ["操作前确认设备状态", "维修建议需人工审核"],
   modelName: "rule-template",
+  adviceStatus: "fallback",
   createdAt: now
 };
 
@@ -145,18 +146,18 @@ export const mockReports: ReportSummary[] = [
     reportId: "report-20260616-0001",
     inspectionId: "inspection-20260616-0001",
     title: "2号线路绝缘子巡检报告",
-    status: "ready",
-    format: "pdf",
-    generatedAt: now,
-    downloadUrl: "/reports/report-20260616-0001.pdf"
+    reportStatus: "ready",
+    format: "html",
+    createdAt: now,
+    url: "/reports/report-20260616-0001.html"
   },
   {
     reportId: "report-20260616-0002",
     inspectionId: "inspection-20260616-0002",
     title: "变电站例行巡检报告",
-    status: "generating",
-    format: "pdf",
-    generatedAt: null,
-    downloadUrl: null
+    reportStatus: "generating",
+    format: "html",
+    createdAt: now,
+    url: ""
   }
 ];

@@ -24,11 +24,28 @@ Default backend URL:
 http://localhost:8000/api
 ```
 
-Initial endpoints:
+Implemented backend endpoints:
 
 - `GET /api/health`
 - `GET /api/system/status`
 - `GET /api/dashboard`
+- `POST /api/inspection/start`
+- `POST /api/inspections/{id}/finish`
+- `POST /api/inspections/{id}/fail`
+- `GET /api/inspections`
+- `GET /api/inspections/{id}/latest-result`
+- `POST /api/detection/results`
+- `GET /api/devices`
+- `GET /api/faults`
+- `GET /api/alarms`
+- `GET /api/events`
+- `PATCH /api/faults/{id}/status`
+- `PATCH /api/alarms/{id}/status`
+- `POST /api/advice/generate`
+- `GET /api/faults/{id}/advice`
+- `GET /api/reports`
+- `GET /api/reports/{id}`
+- `GET /api/reports/{id}/export`
 
 Run backend tests:
 

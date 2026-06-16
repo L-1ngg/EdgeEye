@@ -6,6 +6,8 @@ __pycache__/
 .mypy_cache/
 .venv/
 htmlcov/
+backend/data/*.db
+backend/data/*.db-*
 
 # Node / Vite
 node_modules/

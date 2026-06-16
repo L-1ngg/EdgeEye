@@ -28,8 +28,8 @@ export function ReportsPage({ reports }: ReportsPageProps) {
             <strong>{report.title}</strong>
             <span>{report.inspectionId}</span>
             <span>{report.format.toUpperCase()}</span>
-            <StatusPill status={report.status} />
-            <span>{report.downloadUrl ? "可下载" : "等待生成"}</span>
+            <StatusPill status={report.reportStatus} />
+            <span>{report.url ? "可下载" : "等待生成"}</span>
           </div>
         ))}
       </div>
