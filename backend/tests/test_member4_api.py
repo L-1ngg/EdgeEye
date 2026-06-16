@@ -1,7 +1,9 @@
+import json
 from copy import deepcopy
 
 from fastapi.testclient import TestClient
 
+from app.services import inspection_service as service_module
 from app.main import app
 from app.services.inspection_service import current_timestamp
 
@@ -158,3 +160,49 @@ def test_detection_upload_idempotency_conflict() -> None:
     body = conflict.json()
     assert body["success"] is False
     assert body["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+
+
+def test_advice_generation_uses_configured_llm_provider(monkeypatch) -> None:
+    inspection_id = start_inspection()
+    assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200
+    fault_id = client.get("/api/faults").json()["data"]["items"][0]["faultId"]
+    advice_content = {
+        "possibleCauses": ["loose fitting"],
+        "riskAnalysis": "Provider generated risk analysis.",
+        "inspectionSteps": ["Check the fitting torque."],
+        "maintenanceSuggestions": ["Tighten or replace the affected component."],
+        "safetyNotes": ["Review the advice before field work."],
+    }
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {"choices": [{"message": {"content": json.dumps(advice_content)}}]}
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        assert timeout == 1.5
+        assert request.full_url == "https://llm.example.test/v1/chat/completions"
+        return FakeResponse()
+
+    monkeypatch.setattr(service_module.settings, "llm_provider", "openai-compatible")
+    monkeypatch.setattr(service_module.settings, "llm_api_url", "https://llm.example.test/v1/chat/completions")
+    monkeypatch.setattr(service_module.settings, "llm_api_key", "test-key")
+    monkeypatch.setattr(service_module.settings, "llm_model_name", "repair-model")
+    monkeypatch.setattr(service_module.settings, "llm_timeout_seconds", 1.5)
+    monkeypatch.setattr(service_module.settings, "llm_max_retries", 1)
+    monkeypatch.setattr(service_module.urllib.request, "urlopen", fake_urlopen)
+
+    response = client.post("/api/advice/generate", json={"faultId": fault_id})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["adviceStatus"] == "ready"
+    assert data["modelName"] == "repair-model"
+    assert data["possibleCauses"] == ["loose fitting"]

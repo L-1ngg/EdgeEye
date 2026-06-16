@@ -9,9 +9,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     database_path: str = "data/edgeeye.db"
     llm_provider: str = "rule-template"
+    llm_api_url: str | None = None
     llm_api_key: str | None = None
     llm_model_name: str = "rule-template"
     llm_timeout_seconds: float = 10.0
+    llm_max_retries: int = 2
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

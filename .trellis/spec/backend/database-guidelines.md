@@ -49,7 +49,9 @@ to `data/edgeeye.db` when running from `backend/`.
   - `exports_json`
 - Environment keys:
   - `EDGEEYE_DATABASE_PATH`: optional SQLite file path.
+  - `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
   - `EDGEEYE_LLM_API_KEY`: optional backend-only secret; never write it to DB responses.
+  - `EDGEEYE_LLM_MAX_RETRIES`: retry count before fallback.
 
 ### 4. Validation & Error Matrix
 

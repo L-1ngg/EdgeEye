@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -515,7 +517,7 @@ class InspectionService:
                 return self._advice_from_row(existing)
 
             advice_id = self._next_id(connection, "advice", "advice_id", "advice")
-            generated = self._rule_template_advice(fault)
+            generated, model_name, advice_status = self._generate_advice_payload(fault)
             connection.execute(
                 """
                 INSERT INTO advice (
@@ -523,7 +525,7 @@ class InspectionService:
                     inspection_steps_json, maintenance_suggestions_json, safety_notes_json,
                     model_name, advice_status, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'fallback', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     advice_id,
@@ -533,7 +535,8 @@ class InspectionService:
                     _json_dump(generated["inspectionSteps"]),
                     _json_dump(generated["maintenanceSuggestions"]),
                     _json_dump(generated["safetyNotes"]),
-                    "rule-template",
+                    model_name,
+                    advice_status,
                     _iso(now),
                 ),
             )
@@ -1101,6 +1104,95 @@ class InspectionService:
                 "Isolate power according to site safety procedures.",
             ]
         return base
+
+    def _generate_advice_payload(self, fault: sqlite3.Row) -> tuple[dict[str, Any], str, str]:
+        if not settings.llm_api_url or not settings.llm_api_key or settings.llm_provider == "rule-template":
+            return self._rule_template_advice(fault), "rule-template", "fallback"
+
+        last_error: Exception | None = None
+        for _ in range(max(settings.llm_max_retries, 1)):
+            try:
+                return self._call_llm_provider(fault), settings.llm_model_name, "ready"
+            except (OSError, ValueError, KeyError, urllib.error.URLError) as exc:
+                last_error = exc
+        fallback = self._rule_template_advice(fault)
+        fallback["riskAnalysis"] = (
+            f"{fallback['riskAnalysis']} LLM provider failed; fallback advice was generated locally."
+        )
+        if last_error is not None:
+            fallback["riskAnalysis"] = f"{fallback['riskAnalysis']} Last error: {type(last_error).__name__}."
+        return fallback, "rule-template", "fallback"
+
+    def _call_llm_provider(self, fault: sqlite3.Row) -> dict[str, Any]:
+        body = {
+            "model": settings.llm_model_name,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate electrical inspection repair advice. "
+                        "Return JSON only with possibleCauses, riskAnalysis, "
+                        "inspectionSteps, maintenanceSuggestions, and safetyNotes."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _json_dump(
+                        {
+                            "deviceType": fault["device_type"],
+                            "faultType": fault["fault_type"],
+                            "confidence": fault["confidence"],
+                            "riskLevel": fault["risk_level"],
+                            "location": fault["location"],
+                            "bestImageUrl": fault["best_annotated_image_url"] or fault["best_image_url"],
+                        }
+                    ),
+                },
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+        request = urllib.request.Request(
+            settings.llm_api_url,
+            data=_json_dump(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {settings.llm_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=settings.llm_timeout_seconds) as response:
+            provider_payload = json.loads(response.read().decode("utf-8"))
+        content = provider_payload["choices"][0]["message"]["content"]
+        return self._parse_advice_content(content)
+
+    def _parse_advice_content(self, content: str) -> dict[str, Any]:
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:].strip()
+        payload = json.loads(cleaned)
+        required_list_fields = [
+            "possibleCauses",
+            "inspectionSteps",
+            "maintenanceSuggestions",
+            "safetyNotes",
+        ]
+        for field in required_list_fields:
+            if not isinstance(payload.get(field), list) or not all(
+                isinstance(item, str) for item in payload[field]
+            ):
+                raise ValueError(f"invalid advice field: {field}")
+        if not isinstance(payload.get("riskAnalysis"), str):
+            raise ValueError("invalid advice field: riskAnalysis")
+        return {
+            "possibleCauses": payload["possibleCauses"],
+            "riskAnalysis": payload["riskAnalysis"],
+            "inspectionSteps": payload["inspectionSteps"],
+            "maintenanceSuggestions": payload["maintenanceSuggestions"],
+            "safetyNotes": payload["safetyNotes"],
+        }
 
     def _upload_result_from_row(self, row: sqlite3.Row, *, duplicate: bool) -> DetectionUploadResult:
         inspection_status = "running"

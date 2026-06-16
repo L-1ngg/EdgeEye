@@ -21,11 +21,13 @@ Environment variables use the `EDGEEYE_` prefix:
 
 - `EDGEEYE_DATABASE_PATH`: SQLite database path. Defaults to `data/edgeeye.db`.
 - `EDGEEYE_LLM_PROVIDER`: reserved provider selector. Defaults to `rule-template`.
+- `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
 - `EDGEEYE_LLM_API_KEY`: optional backend-only LLM API key. It is never returned to the frontend.
 - `EDGEEYE_LLM_MODEL_NAME`: model name metadata for future provider calls.
-- `EDGEEYE_LLM_TIMEOUT_SECONDS`: timeout for future provider calls.
+- `EDGEEYE_LLM_TIMEOUT_SECONDS`: timeout for provider calls.
+- `EDGEEYE_LLM_MAX_RETRIES`: retry count before rule-template fallback.
 
-When no provider is configured, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
+When no provider is configured or the provider call fails, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
 
 ## Member 4 Endpoints
 
