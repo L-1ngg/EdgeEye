@@ -70,3 +70,36 @@ Implemented member 4 backend persistence, detection upload, fault and alarm aggr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Add LLM advice provider fallback
+
+**Date**: 2026-06-17
+**Task**: Add LLM advice provider fallback
+**Branch**: `main`
+
+### Summary
+
+Added configurable OpenAI-compatible LLM advice provider calls with timeout/retry handling and rule-template fallback coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e4aa30a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
