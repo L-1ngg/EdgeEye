@@ -82,6 +82,8 @@ Board-side validation commands will be provided to the user step by step and adj
 - [ ] After each meaningful file update, inspect `git status --short` and create a focused commit for this task's related files.
 - [ ] Keep commits scoped by milestone, for example planning, edge skeleton, camera input, model runner, upload/outbox, health/runbook.
 - [ ] Do not stage unrelated changes from other members or existing worktree noise.
+- [ ] For business-code implementation beyond Trellis tasks, Agent skills, or collaboration docs, switch to a new branch before editing. Recommended branch: `eir/edge-atlas`.
+- [ ] Keep `main` for small Trellis/docs coordination updates unless the user explicitly asks for direct implementation there.
 - [ ] After a large update or completed milestone, push the committed branch to the configured remote so collaborators can pull it.
 - [ ] Before push, run the relevant validation commands for the files changed. If validation is blocked by board hardware, driver state, or missing assets, document the blocker in the status update.
 - [ ] Never force-push unless the user explicitly asks for it and the branch policy is clear.
