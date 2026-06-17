@@ -557,6 +557,9 @@ class InspectionService:
         with self.store.connect() as connection:
             row = connection.execute("SELECT * FROM advice WHERE fault_id = ?", (fault_id,)).fetchone()
             if row is None:
+                fault = connection.execute("SELECT 1 FROM faults WHERE fault_id = ?", (fault_id,)).fetchone()
+                if fault is None:
+                    raise ApiException("NOT_FOUND", "fault not found", status_code=404)
                 raise ApiException("ADVICE_NOT_READY", "advice has not been generated", status_code=404)
         return self._advice_from_row(row)
 

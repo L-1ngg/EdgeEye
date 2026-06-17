@@ -1145,16 +1145,6 @@ components:
           type: string
         adviceStatus:
           $ref: "#/components/schemas/AdviceStatus"
-        lastHandledBy:
-          type: string
-          nullable: true
-        lastHandledAt:
-          type: string
-          nullable: true
-          format: date-time
-        lastHandleNote:
-          type: string
-          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1466,12 +1456,18 @@ components:
         - eventType
         - inspectionId
         - deviceId
+        - deviceName
+        - faultId
         - faultType
         - riskLevel
         - processStatus
+        - title
+        - summary
         - occurrenceCount
         - firstOccurredAt
         - lastOccurredAt
+        - latestFrameId
+        - latestImageUrl
         - adviceStatus
       properties:
         eventId:
@@ -1492,6 +1488,7 @@ components:
           type: string
         alarmId:
           type: string
+          nullable: true
         faultType:
           $ref: "#/components/schemas/FaultType"
         riskLevel:
@@ -1524,6 +1521,16 @@ components:
           type: string
         adviceStatus:
           $ref: "#/components/schemas/AdviceStatus"
+        lastHandledBy:
+          type: string
+          nullable: true
+        lastHandledAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastHandleNote:
+          type: string
+          nullable: true
     UpdateProcessStatusRequest:
       type: object
       additionalProperties: false

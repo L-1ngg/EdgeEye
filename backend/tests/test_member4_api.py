@@ -186,6 +186,45 @@ def test_detection_upload_idempotency_conflict() -> None:
     assert body["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
 
+def test_frontend_action_missing_resources_use_error_envelope() -> None:
+    fault_status = client.patch(
+        "/api/faults/fault-missing/status",
+        json={"processStatus": "resolved", "operator": "admin"},
+    )
+    assert fault_status.status_code == 404
+    assert fault_status.json()["success"] is False
+    assert fault_status.json()["error"]["code"] == "NOT_FOUND"
+
+    alarm_status = client.patch(
+        "/api/alarms/alarm-missing/status",
+        json={"processStatus": "resolved", "operator": "admin"},
+    )
+    assert alarm_status.status_code == 404
+    assert alarm_status.json()["success"] is False
+    assert alarm_status.json()["error"]["code"] == "NOT_FOUND"
+
+    report_export = client.get("/api/reports/report-missing/export?format=pdf")
+    assert report_export.status_code == 404
+    assert report_export.json()["success"] is False
+    assert report_export.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_fault_advice_distinguishes_missing_fault_from_not_ready() -> None:
+    missing_fault = client.get("/api/faults/fault-missing/advice")
+    assert missing_fault.status_code == 404
+    assert missing_fault.json()["success"] is False
+    assert missing_fault.json()["error"]["code"] == "NOT_FOUND"
+
+    inspection_id = start_inspection()
+    assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200
+    fault_id = client.get("/api/faults").json()["data"]["items"][0]["faultId"]
+
+    not_ready = client.get(f"/api/faults/{fault_id}/advice")
+    assert not_ready.status_code == 404
+    assert not_ready.json()["success"] is False
+    assert not_ready.json()["error"]["code"] == "ADVICE_NOT_READY"
+
+
 def test_detection_upload_accepts_missing_npu_metric() -> None:
     inspection_id = start_inspection()
     payload = detection_payload(inspection_id)
