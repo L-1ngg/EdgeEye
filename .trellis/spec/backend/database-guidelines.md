@@ -47,8 +47,13 @@ to `data/edgeeye.db` when running from `backend/`.
   - `performance_json`
   - `sample_window_json`
   - `exports_json`
+- `performance_json.npuUsage` can be `null` when Atlas cannot read board-side
+  NPU metrics; preserve the value and return it as `null` from system status
+  instead of coercing it to `0`.
 - Environment keys:
   - `EDGEEYE_DATABASE_PATH`: optional SQLite file path.
+  - `EDGEEYE_UPLOADS_DIR`: optional static root served at `/uploads`.
+  - `EDGEEYE_REPORTS_DIR`: optional static root served at `/reports`.
   - `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
   - `EDGEEYE_LLM_API_KEY`: optional backend-only secret; never write it to DB responses.
   - `EDGEEYE_LLM_MAX_RETRIES`: retry count before fallback.
@@ -128,3 +133,5 @@ shape.
   create test databases at unique temp paths before constructing `SQLiteStore`.
 - Do not store frontend-only field names such as `downloadUrl` in report list
   rows; backend report list uses `reportStatus`, `createdAt`, and `url`.
+- Runtime SQLite files under `backend/data/` are generated data, not source; do
+  not stage them.

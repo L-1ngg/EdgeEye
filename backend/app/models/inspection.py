@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.common import (
     AdviceStatus,
@@ -110,7 +110,7 @@ class Performance(BaseModel):
     fps: float = Field(default=0, ge=0)
     cpuUsage: float = Field(default=0, ge=0, le=100)
     memoryUsage: float = Field(default=0, ge=0, le=100)
-    npuUsage: float = Field(default=0, ge=0, le=100)
+    npuUsage: float | None = Field(default=None, ge=0, le=100)
 
 
 class SampleWindow(BaseModel):
@@ -141,6 +141,21 @@ class DetectionUploadRequest(BaseModel):
     imageHeight: int = Field(ge=1)
     detections: list[Detection]
     performance: Performance
+
+    @model_validator(mode="after")
+    def validate_detection_boxes(self) -> "DetectionUploadRequest":
+        for detection in self.detections:
+            if detection.imageWidth is None:
+                detection.imageWidth = self.imageWidth
+            if detection.imageHeight is None:
+                detection.imageHeight = self.imageHeight
+            x1, y1, x2, y2 = detection.bbox
+            if not (0 <= x1 < x2 <= self.imageWidth and 0 <= y1 < y2 <= self.imageHeight):
+                raise ValueError(
+                    "bbox must satisfy 0 <= x1 < x2 <= imageWidth and "
+                    "0 <= y1 < y2 <= imageHeight"
+                )
+        return self
 
 
 class DetectionUploadResult(BaseModel):

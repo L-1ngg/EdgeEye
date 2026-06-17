@@ -402,6 +402,7 @@ HTTP 状态码建议：
 - `detectionId` 由后端保存后生成；Atlas 上传时不需要提供。
 - Atlas 上传时 `deviceType` 和 `faultType` 至少有一个非空；纯设备目标填写 `deviceType`，故障或环境异常目标填写 `faultType`。
 - `bbox` 必须满足 `0 <= x1 < x2 <= imageWidth`、`0 <= y1 < y2 <= imageHeight`。
+- 后端会在 `POST /api/detection/results` 入口校验 `bbox` 是否越界；越界请求返回统一错误响应 `VALIDATION_ERROR`，不会写入检测结果、故障或告警。
 
 ### 故障记录 `Fault`
 
@@ -574,6 +575,8 @@ HTTP 状态码建议：
   }
 }
 ```
+
+说明：`performance.npuUsage` 在 Atlas 板端无法读取 NPU 指标时可以为 `null`；后端会保存该值并在系统状态接口中原样返回。
 
 后端成功响应：
 

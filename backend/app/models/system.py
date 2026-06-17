@@ -25,7 +25,7 @@ class SubsystemStatus(BaseModel):
 class AtlasStatus(SubsystemStatus):
     cpuUsage: float
     memoryUsage: float
-    npuUsage: float
+    npuUsage: float | None
 
 
 class ModelStatus(SubsystemStatus):

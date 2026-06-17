@@ -9,6 +9,7 @@ interface DashboardPageProps {
 
 export function DashboardPage({ dashboard, system }: DashboardPageProps) {
   const latestAlarm = dashboard.latestHighRiskAlarm;
+  const atlasNpuUsage = system.atlas.npuUsage;
 
   return (
     <div className="page-grid">
@@ -39,7 +40,7 @@ export function DashboardPage({ dashboard, system }: DashboardPageProps) {
         </div>
         <div className="status-list">
           <StatusRow label="摄像头" status={system.camera.status} detail={system.camera.message} />
-          <StatusRow label="Atlas" status={system.atlas.status} detail={`NPU ${system.atlas.npuUsage}%`} />
+          <StatusRow label="Atlas" status={system.atlas.status} detail={atlasNpuUsage === null ? "NPU N/A" : `NPU ${atlasNpuUsage}%`} />
           <StatusRow label="模型" status={system.model.status} detail={`${system.model.fps} FPS / ${system.model.latencyMs}ms`} />
           <StatusRow label="后端" status={system.backend.status} detail={system.backend.message} />
         </div>

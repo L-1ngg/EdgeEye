@@ -162,6 +162,33 @@ def test_detection_upload_idempotency_conflict() -> None:
     assert body["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
 
+def test_detection_upload_accepts_missing_npu_metric() -> None:
+    inspection_id = start_inspection()
+    payload = detection_payload(inspection_id)
+    payload["performance"]["npuUsage"] = None
+
+    response = client.post("/api/detection/results", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["accepted"] is True
+    system = client.get("/api/system/status")
+    assert system.status_code == 200
+    assert system.json()["data"]["atlas"]["npuUsage"] is None
+
+
+def test_detection_upload_rejects_out_of_bounds_bbox() -> None:
+    inspection_id = start_inspection()
+    payload = detection_payload(inspection_id)
+    payload["detections"][0]["bbox"] = [120, 80, 2000, 420]
+
+    response = client.post("/api/detection/results", json=payload)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+
+
 def test_advice_generation_uses_configured_llm_provider(monkeypatch) -> None:
     inspection_id = start_inspection()
     assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200

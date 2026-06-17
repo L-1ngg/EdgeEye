@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_name: str = "EdgeEye API"
     app_version: str = "0.1.0"
     database_path: str = "data/edgeeye.db"
+    uploads_dir: str = "uploads"
+    reports_dir: str = "reports"
     llm_provider: str = "rule-template"
     llm_api_url: str | None = None
     llm_api_key: str | None = None

@@ -1147,6 +1147,7 @@ components:
           maximum: 100
         npuUsage:
           type: number
+          nullable: true
           minimum: 0
           maximum: 100
     SampleWindow:
@@ -1356,6 +1357,7 @@ components:
               type: number
             npuUsage:
               type: number
+              nullable: true
     ModelStatus:
       allOf:
         - $ref: "#/components/schemas/SubsystemStatus"

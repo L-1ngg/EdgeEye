@@ -55,6 +55,8 @@ shapes.
 - Backend report list fields are `reportStatus`, `createdAt`, and `url`.
 - Backend advice includes `adviceStatus`.
 - `EventItem.alarmId` can be `null`.
+- `AtlasStatus.npuUsage` and `RealtimeSnapshot.performance.npuUsage` can be
+  `null`; dashboard/realtime UI should render `N/A` rather than `null%`.
 - Mock fallback objects must satisfy the same interfaces as API responses.
 
 ### 4. Validation & Error Matrix
@@ -74,6 +76,8 @@ shapes.
 
 - Run `npm run build` after changing API-facing types.
 - Keep mock data compiling against shared interfaces.
+- Add or update display handling when a backend numeric metric becomes
+  nullable.
 
 ### 7. Wrong vs Correct
 

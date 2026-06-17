@@ -57,6 +57,7 @@ register_exception_handlers(app)
 - Duplicate frame upload -> `409 DUPLICATE_UPLOAD`.
 - Latest result missing -> `404 RESULT_NOT_READY`.
 - Advice missing -> `404 ADVICE_NOT_READY`.
+- Out-of-bounds detection `bbox` -> `400 VALIDATION_ERROR`.
 - LLM provider timeout, URL error, or invalid JSON -> saved fallback advice with
   `adviceStatus: fallback` instead of exposing provider internals.
 

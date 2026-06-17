@@ -6,6 +6,9 @@
 - API 前缀：`/api`
 - 请求和响应均使用 JSON。
 - 当前最小联调方案中，图片由 Atlas 或边缘程序先保存为后端可访问 URL，再在 JSON 中提交。不要在 `POST /api/detection/results` 上混用 multipart。
+- 后端默认将 `EDGEEYE_UPLOADS_DIR` 挂载到 `/uploads`，将 `EDGEEYE_REPORTS_DIR` 挂载到 `/reports`。Atlas 可以按 `/uploads/raw/{inspectionId}/{frameId}.jpg` 和 `/uploads/annotated/{inspectionId}/{frameId}.jpg` 生成可展示 URL。
+- `performance.npuUsage` 在板端 NPU 指标不可读时可以为 `null`。
+- 后端会校验每个 `bbox` 是否满足 `0 <= x1 < x2 <= imageWidth` 和 `0 <= y1 < y2 <= imageHeight`，越界返回 `VALIDATION_ERROR`。
 - 成功和错误响应格式遵守 [数据契约与接口规范](./contracts.md)。
 - 时间、枚举、ID 和字段命名遵守 [数据契约与接口规范](./contracts.md)。
 - 机器可校验定义见 [OpenAPI 规范](./openapi.yaml)。

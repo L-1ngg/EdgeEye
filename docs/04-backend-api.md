@@ -330,3 +330,10 @@ uploads/
 - 可以提供 Dashboard 所需系统状态数据；
 - 大模型密钥只在后端使用；
 - 接口异常时返回明确错误信息。
+
+## 后端联调补充约定
+
+- 后端默认将 `EDGEEYE_UPLOADS_DIR` 挂载到 `/uploads`，将 `EDGEEYE_REPORTS_DIR` 挂载到 `/reports`，用于展示 Atlas 保存的原图、标注图和报告导出文件。
+- `POST /api/detection/results` 仍然只接收 JSON；不要在该路径混用 multipart。
+- 每个检测框必须满足 `0 <= x1 < x2 <= imageWidth` 和 `0 <= y1 < y2 <= imageHeight`；后端会在入口校验，越界返回 `VALIDATION_ERROR`。
+- `performance.npuUsage` 可以为 `null`，用于表示 Atlas 板端当前无法读取 NPU 使用率。

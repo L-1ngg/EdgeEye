@@ -20,6 +20,8 @@ http://localhost:8000/api
 Environment variables use the `EDGEEYE_` prefix:
 
 - `EDGEEYE_DATABASE_PATH`: SQLite database path. Defaults to `data/edgeeye.db`.
+- `EDGEEYE_UPLOADS_DIR`: local static root served at `/uploads`. Defaults to `uploads`.
+- `EDGEEYE_REPORTS_DIR`: local static root served at `/reports`. Defaults to `reports`.
 - `EDGEEYE_LLM_PROVIDER`: reserved provider selector. Defaults to `rule-template`.
 - `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
 - `EDGEEYE_LLM_API_KEY`: optional backend-only LLM API key. It is never returned to the frontend.
@@ -28,6 +30,14 @@ Environment variables use the `EDGEEYE_` prefix:
 - `EDGEEYE_LLM_MAX_RETRIES`: retry count before rule-template fallback.
 
 When no provider is configured or the provider call fails, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
+
+## Atlas Integration Notes
+
+- `POST /api/detection/results` accepts JSON only. Do not send multipart data to this endpoint.
+- Atlas should save raw and annotated images under a backend-visible location and submit URLs such as `/uploads/raw/{inspectionId}/{frameId}.jpg` and `/uploads/annotated/{inspectionId}/{frameId}.jpg`.
+- The backend serves `EDGEEYE_UPLOADS_DIR` at `/uploads` and `EDGEEYE_REPORTS_DIR` at `/reports`.
+- Every detection bbox is validated against the uploaded image dimensions: `0 <= x1 < x2 <= imageWidth` and `0 <= y1 < y2 <= imageHeight`.
+- `performance.npuUsage` may be `null` when board-side NPU metrics are unavailable.
 
 ## Member 4 Endpoints
 

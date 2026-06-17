@@ -1357,10 +1357,13 @@ class InspectionService:
         )
 
 
-_service = InspectionService(SQLiteStore(settings.database_path))
+_service: InspectionService | None = None
 
 
 def get_service() -> InspectionService:
+    global _service
+    if _service is None:
+        _service = InspectionService(SQLiteStore(settings.database_path))
     return _service
 
 

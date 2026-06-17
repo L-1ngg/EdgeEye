@@ -33,7 +33,7 @@ export interface SubsystemStatus {
 export interface AtlasStatus extends SubsystemStatus {
   cpuUsage: number;
   memoryUsage: number;
-  npuUsage: number;
+  npuUsage: number | null;
 }
 
 export interface ModelStatus extends SubsystemStatus {
@@ -113,7 +113,7 @@ export interface RealtimeSnapshot {
     fps: number;
     cpuUsage: number;
     memoryUsage: number;
-    npuUsage: number;
+    npuUsage: number | null;
   };
   faults?: unknown[];
 }

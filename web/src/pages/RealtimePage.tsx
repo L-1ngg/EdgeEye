@@ -8,6 +8,7 @@ interface RealtimePageProps {
 
 export function RealtimePage({ snapshot }: RealtimePageProps) {
   const detection = snapshot.detections[0];
+  const npuUsage = snapshot.performance.npuUsage;
 
   return (
     <div className="page-grid">
@@ -52,7 +53,7 @@ export function RealtimePage({ snapshot }: RealtimePageProps) {
           <MetricCard label="FPS" value={snapshot.performance.fps} />
           <MetricCard label="延迟" value={`${snapshot.performance.latencyMs}ms`} />
           <MetricCard label="CPU" value={`${snapshot.performance.cpuUsage}%`} />
-          <MetricCard label="NPU" value={`${snapshot.performance.npuUsage}%`} />
+          <MetricCard label="NPU" value={npuUsage === null ? "N/A" : `${npuUsage}%`} />
         </div>
       </section>
     </div>
