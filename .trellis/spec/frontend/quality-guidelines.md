@@ -26,6 +26,8 @@ documented API contract boundary.
 - Keep shared API types in `web/src/types/`.
 - Keep reusable UI in `web/src/components/`.
 - Keep page-level composition in `web/src/pages/`.
+- Keep frontend-only demo authentication in `web/src/auth/`; do not imply it is
+  backend-enforced security.
 
 ---
 

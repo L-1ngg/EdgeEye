@@ -13,6 +13,9 @@ const statusLabels: Record<string, string> = {
   fresh: "新鲜",
   stale: "过期",
   pending: "待处理",
+  running: "运行中",
+  completed: "已完成",
+  cancelled: "已取消",
   processing: "处理中",
   resolved: "已处理",
   ignored: "已忽略",
@@ -29,6 +32,19 @@ const statusLabels: Record<string, string> = {
   fallback: "规则降级"
 };
 
+// States that convey "live / active" and earn a pulsing dot.
+const LIVE_STATES = new Set(["online", "fresh", "ready"]);
+
+export function getStatusLabel(status: string) {
+  return statusLabels[status] ?? status;
+}
+
 export function StatusPill({ status }: StatusPillProps) {
-  return <span className={`status-pill status-pill--${status}`}>{statusLabels[status] ?? status}</span>;
+  const isLive = LIVE_STATES.has(status);
+  return (
+    <span className={`status-pill status-pill--${status}`}>
+      {isLive ? <span className="status-dot" aria-hidden="true" /> : null}
+      {getStatusLabel(status)}
+    </span>
+  );
 }

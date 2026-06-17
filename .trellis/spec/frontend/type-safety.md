@@ -32,6 +32,8 @@ shapes.
 - Use `ApiResponse<T>` for successful backend responses.
 - Use `PageResult<T>` for backend list endpoints, then unwrap `items` inside
   `src/api/client.ts`; pages should receive arrays or already-shaped objects.
+- Use `DataResult<T>` when the frontend can fall back from an unavailable API
+  endpoint to typed mock data.
 - Keep enum-like strings as union types matching the docs, for example `RiskLevel` and `PageState`.
 - Use typed mock data as the fallback shape for unavailable backend endpoints.
 

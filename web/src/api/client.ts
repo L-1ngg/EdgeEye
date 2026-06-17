@@ -1,18 +1,16 @@
-import {
-  mockAdvice,
-  mockDashboard,
-  mockEvents,
-  mockRealtimeSnapshot,
-  mockReports,
-  mockSystemOverview
-} from "../data/mockData";
 import type {
+  Alarm,
   ApiResponse,
+  DataResult,
   Dashboard,
+  Device,
   EventItem,
+  Fault,
   InspectionListItem,
   PageResult,
+  ProcessStatus,
   RepairAdvice,
+  ReportExport,
   ReportSummary,
   RealtimeSnapshot,
   SystemOverview
@@ -29,74 +27,149 @@ async function getJson<T>(path: string): Promise<T> {
   return body.data;
 }
 
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  const responseBody = (await response.json()) as ApiResponse<T>;
+  return responseBody.data;
+}
+
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  const responseBody = (await response.json()) as ApiResponse<T>;
+  return responseBody.data;
+}
+
 async function getPageItems<T>(path: string): Promise<T[]> {
   const page = await getJson<PageResult<T>>(path);
   return page.items;
 }
 
-export async function getDashboard(): Promise<Dashboard> {
-  try {
-    return await getJson<Dashboard>("/dashboard");
-  } catch {
-    return mockDashboard;
-  }
+async function getApiData<T>(loader: () => Promise<T>): Promise<DataResult<T>> {
+  return { data: await loader(), source: "api" };
 }
 
-export async function getSystemOverview(): Promise<SystemOverview> {
-  try {
-    return await getJson<SystemOverview>("/system/status");
-  } catch {
-    return mockSystemOverview;
-  }
+export async function getDashboard(): Promise<DataResult<Dashboard>> {
+  return getApiData(() => getJson<Dashboard>("/dashboard"));
 }
 
-export async function getRealtimeSnapshot(): Promise<RealtimeSnapshot> {
-  try {
+export async function getSystemOverview(): Promise<DataResult<SystemOverview>> {
+  return getApiData(() => getJson<SystemOverview>("/system/status"));
+}
+
+export async function getRealtimeSnapshot(): Promise<DataResult<RealtimeSnapshot>> {
+  return getApiData(async () => {
     const inspections = await getPageItems<InspectionListItem>("/inspections?pageSize=1");
-    const inspectionId = inspections[0]?.inspectionId ?? mockRealtimeSnapshot.inspectionId;
-    return await getJson<RealtimeSnapshot>(`/inspections/${inspectionId}/latest-result`);
-  } catch {
-    return mockRealtimeSnapshot;
-  }
+    const latestInspection = inspections[0];
+
+    if (!latestInspection) {
+      return createNoFrameSnapshot();
+    }
+
+    try {
+      return await getJson<RealtimeSnapshot>(`/inspections/${latestInspection.inspectionId}/latest-result`);
+    } catch {
+      return createNoFrameSnapshot(latestInspection);
+    }
+  });
 }
 
-export async function getEvents(): Promise<EventItem[]> {
-  try {
-    return await getPageItems<EventItem>("/events");
-  } catch {
-    return mockEvents;
-  }
+export async function getEvents(): Promise<DataResult<EventItem[]>> {
+  return getApiData(() => getPageItems<EventItem>("/events"));
 }
 
-export async function getReports(): Promise<ReportSummary[]> {
-  try {
-    return await getPageItems<ReportSummary>("/reports");
-  } catch {
-    return mockReports;
-  }
+export async function getReports(): Promise<DataResult<ReportSummary[]>> {
+  return getApiData(() => getPageItems<ReportSummary>("/reports"));
 }
 
-export async function getAdvice(faultId: string | null | undefined): Promise<RepairAdvice> {
+export async function getDevices(): Promise<DataResult<Device[]>> {
+  return getApiData(() => getPageItems<Device>("/devices"));
+}
+
+export async function getFaults(): Promise<DataResult<Fault[]>> {
+  return getApiData(() => getPageItems<Fault>("/faults"));
+}
+
+export async function getAlarms(): Promise<DataResult<Alarm[]>> {
+  return getApiData(() => getPageItems<Alarm>("/alarms"));
+}
+
+export async function getAdvice(faultId: string | null | undefined): Promise<DataResult<RepairAdvice | null>> {
   if (!faultId) {
-    return mockAdvice;
+    return { data: null, source: "api" };
   }
 
   try {
-    return await getJson<RepairAdvice>(`/faults/${faultId}/advice`);
+    return { data: await getJson<RepairAdvice>(`/faults/${faultId}/advice`), source: "api" };
   } catch {
     try {
-      const response = await fetch(`${API_BASE_URL}/advice/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ faultId })
-      });
-      if (!response.ok) {
-        return mockAdvice;
-      }
-      const body = (await response.json()) as ApiResponse<RepairAdvice>;
-      return body.data;
+      return { data: await postJson<RepairAdvice>("/advice/generate", { faultId }), source: "api" };
     } catch {
-      return mockAdvice;
+      return { data: null, source: "unavailable" };
     }
   }
+}
+
+export async function updateFaultStatus(
+  faultId: string,
+  processStatus: ProcessStatus,
+  operator = "admin"
+): Promise<Fault> {
+  return patchJson<Fault>(`/faults/${faultId}/status`, { processStatus, operator });
+}
+
+export async function updateAlarmStatus(
+  alarmId: string,
+  processStatus: ProcessStatus,
+  operator = "admin"
+): Promise<Alarm> {
+  return patchJson<Alarm>(`/alarms/${alarmId}/status`, { processStatus, operator });
+}
+
+export async function exportReportPdf(reportId: string): Promise<ReportExport> {
+  return getJson<ReportExport>(`/reports/${reportId}/export?format=pdf`);
+}
+
+function createNoFrameSnapshot(inspection?: InspectionListItem): RealtimeSnapshot {
+  return {
+    inspectionId: inspection?.inspectionId ?? "暂无巡检",
+    inspectionStatus: inspection?.status ?? "pending",
+    resultStatus: "no_frame",
+    frameId: null,
+    frameSeq: null,
+    timestamp: null,
+    receivedAt: null,
+    staleAfterMs: null,
+    isKeyFrame: false,
+    uploadReason: "system_event",
+    eventKey: null,
+    eventStatus: null,
+    sampleWindow: null,
+    imageUrl: null,
+    annotatedImageUrl: null,
+    imageWidth: 1280,
+    imageHeight: 720,
+    detections: [],
+    performance: {
+      latencyMs: 0,
+      fps: 0,
+      cpuUsage: 0,
+      memoryUsage: 0,
+      npuUsage: null
+    },
+    faults: []
+  };
 }

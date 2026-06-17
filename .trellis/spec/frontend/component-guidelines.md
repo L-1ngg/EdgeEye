@@ -16,6 +16,8 @@ scannable operational UI over landing-page or marketing composition.
 - Export named React components.
 - Keep shared components focused on presentation.
 - Keep page data assembly in page components or the app shell, not low-level components.
+- Keep the minimal administrator login as a utility screen before the dashboard
+  shell, not as a marketing page.
 
 ---
 
@@ -47,3 +49,4 @@ scannable operational UI over landing-page or marketing composition.
 
 - Do not create a landing page when the task is to build the working app.
 - Do not put card-like page sections around other card-like UI elements.
+- Do not present frontend-only demo authentication as production security.

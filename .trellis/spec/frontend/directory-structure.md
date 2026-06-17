@@ -17,6 +17,7 @@ screen is the operational dashboard shell, not a marketing page.
 web/
 ├── src/
 │   ├── api/          # API client functions and fallback boundary
+│   ├── auth/         # frontend-only demo authentication helpers
 │   ├── components/   # shared presentational components
 │   ├── data/         # typed demo/mock data
 │   ├── pages/        # page-level views
@@ -34,6 +35,7 @@ web/
 - Put reusable UI in `src/components/`.
 - Put full-page views in `src/pages/`.
 - Put API calls in `src/api/`; pages should not call `fetch` directly.
+- Put frontend-only demo authentication helpers in `src/auth/`.
 - Put shared contract types in `src/types/`.
 - Put demo data in `src/data/` and keep it typed.
 
@@ -52,5 +54,6 @@ web/
 
 - `web/src/App.tsx`
 - `web/src/api/client.ts`
+- `web/src/auth/session.ts`
 - `web/src/types/contracts.ts`
 - `web/src/pages/DashboardPage.tsx`

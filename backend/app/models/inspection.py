@@ -202,6 +202,9 @@ class Fault(BaseModel):
     bestAnnotatedImageUrl: str | None = None
     location: str | None = None
     createdAt: datetime
+    lastHandledBy: str | None = None
+    lastHandledAt: datetime | None = None
+    lastHandleNote: str | None = None
 
 
 class Alarm(BaseModel):
@@ -220,6 +223,9 @@ class Alarm(BaseModel):
     suppressedCount: int = Field(ge=0)
     reopenCount: int = Field(default=0, ge=0)
     createdAt: datetime
+    lastHandledBy: str | None = None
+    lastHandledAt: datetime | None = None
+    lastHandleNote: str | None = None
 
 
 class LatestInspectionResult(DetectionUploadRequest):
@@ -252,6 +258,9 @@ class EventItem(BaseModel):
     latestFrameId: str
     latestImageUrl: str
     adviceStatus: AdviceStatus
+    lastHandledBy: str | None = None
+    lastHandledAt: datetime | None = None
+    lastHandleNote: str | None = None
 
 
 class UpdateProcessStatusRequest(BaseModel):

@@ -483,25 +483,35 @@ class InspectionService:
         )
 
     def update_fault_status(self, fault_id: str, request: UpdateProcessStatusRequest) -> Any:
+        handled_at = current_timestamp()
         with self.store.connect() as connection:
             row = connection.execute("SELECT * FROM faults WHERE fault_id = ?", (fault_id,)).fetchone()
             if row is None:
                 raise ApiException("NOT_FOUND", "fault not found", status_code=404)
             connection.execute(
-                "UPDATE faults SET process_status = ? WHERE fault_id = ?",
-                (request.processStatus, fault_id),
+                """
+                UPDATE faults
+                SET process_status = ?, last_handled_by = ?, last_handled_at = ?, last_handle_note = ?
+                WHERE fault_id = ?
+                """,
+                (request.processStatus, request.operator, _iso(handled_at), request.note, fault_id),
             )
             updated = connection.execute("SELECT * FROM faults WHERE fault_id = ?", (fault_id,)).fetchone()
         return self._fault_from_row(updated)
 
     def update_alarm_status(self, alarm_id: str, request: UpdateProcessStatusRequest) -> Alarm:
+        handled_at = current_timestamp()
         with self.store.connect() as connection:
             row = connection.execute("SELECT * FROM alarms WHERE alarm_id = ?", (alarm_id,)).fetchone()
             if row is None:
                 raise ApiException("NOT_FOUND", "alarm not found", status_code=404)
             connection.execute(
-                "UPDATE alarms SET process_status = ? WHERE alarm_id = ?",
-                (request.processStatus, alarm_id),
+                """
+                UPDATE alarms
+                SET process_status = ?, last_handled_by = ?, last_handled_at = ?, last_handle_note = ?
+                WHERE alarm_id = ?
+                """,
+                (request.processStatus, request.operator, _iso(handled_at), request.note, alarm_id),
             )
             updated = connection.execute("SELECT * FROM alarms WHERE alarm_id = ?", (alarm_id,)).fetchone()
         return self._alarm_from_row(updated)
@@ -631,15 +641,32 @@ class InspectionService:
             report = connection.execute("SELECT * FROM reports WHERE report_id = ?", (report_id,)).fetchone()
             if report is None:
                 raise ApiException("NOT_FOUND", "report not found", status_code=404)
-        file_name = f"{report_id}.{report_format}"
-        return ReportExport(
-            format=report_format,
-            exportStatus="ready",
-            downloadUrl=f"/reports/{file_name}",
-            fileName=file_name,
-            generatedAt=_dt(report["created_at"]),
-            expiresAt=None,
-        )
+            generated_at = current_timestamp()
+            file_name = f"{report_id}.{report_format}"
+            download_url = f"/reports/{file_name}"
+            if report_format == "pdf":
+                self._write_pdf_report(report, file_name)
+            else:
+                self._write_html_report(report, file_name)
+            export = ReportExport(
+                format=report_format,
+                exportStatus="ready",
+                downloadUrl=download_url,
+                fileName=file_name,
+                generatedAt=generated_at,
+                expiresAt=None,
+            )
+            exports = [
+                item
+                for item in _json_load(report["exports_json"], [])
+                if item.get("format") != report_format
+            ]
+            exports.append(export.model_dump(mode="json"))
+            connection.execute(
+                "UPDATE reports SET exports_json = ? WHERE report_id = ?",
+                (_json_dump(exports), report_id),
+            )
+        return export
 
     def get_dashboard(self) -> Dashboard:
         with self.store.connect() as connection:
@@ -1016,6 +1043,7 @@ class InspectionService:
                 """,
                 (title, summary, url, _iso(generated_at), _json_dump(exports), report_id),
             )
+            self._write_html_report({"report_id": report_id, "title": title, "summary": summary}, f"{report_id}.html")
             return
         connection.execute(
             """
@@ -1026,6 +1054,62 @@ class InspectionService:
             """,
             (report_id, inspection_id, title, summary, url, _iso(generated_at), _json_dump(exports)),
         )
+        self._write_html_report({"report_id": report_id, "title": title, "summary": summary}, f"{report_id}.html")
+
+    def _reports_dir(self) -> Path:
+        reports_dir = Path(settings.reports_dir)
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        return reports_dir
+
+    def _write_html_report(self, report: sqlite3.Row | dict[str, Any], file_name: str) -> None:
+        title = report["title"]
+        summary = report["summary"]
+        html = (
+            "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+            f"<title>{title}</title></head><body>"
+            f"<h1>{title}</h1><p>{summary}</p>"
+            f"<p>Report ID: {report['report_id']}</p>"
+            "</body></html>"
+        )
+        (self._reports_dir() / file_name).write_text(html, encoding="utf-8")
+
+    def _write_pdf_report(self, report: sqlite3.Row | dict[str, Any], file_name: str) -> None:
+        title = str(report["title"])
+        summary = str(report["summary"])
+        lines = [title, summary, f"Report ID: {report['report_id']}"]
+        text_commands = ["BT", "/F1 14 Tf", "72 760 Td"]
+        for index, line in enumerate(lines):
+            if index:
+                text_commands.append("0 -24 Td")
+            text_commands.append(f"({self._escape_pdf_text(line)}) Tj")
+        text_commands.append("ET")
+        stream = "\n".join(text_commands).encode("latin-1", errors="replace")
+        objects = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        ]
+        pdf = bytearray(b"%PDF-1.4\n")
+        offsets = [0]
+        for index, obj in enumerate(objects, start=1):
+            offsets.append(len(pdf))
+            pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+            pdf.extend(obj)
+            pdf.extend(b"\nendobj\n")
+        xref_at = len(pdf)
+        pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+        pdf.extend(b"0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+        pdf.extend(
+            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n".encode("ascii")
+        )
+        (self._reports_dir() / file_name).write_bytes(bytes(pdf))
+
+    def _escape_pdf_text(self, value: str) -> str:
+        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
     def _ensure_device(self, connection: sqlite3.Connection, device_id: str, now: datetime) -> sqlite3.Row:
         row = connection.execute("SELECT * FROM devices WHERE device_id = ?", (device_id,)).fetchone()
@@ -1292,6 +1376,9 @@ class InspectionService:
             bestAnnotatedImageUrl=row["best_annotated_image_url"],
             location=row["location"],
             createdAt=_dt(row["created_at"]),
+            lastHandledBy=row["last_handled_by"],
+            lastHandledAt=_dt(row["last_handled_at"]),
+            lastHandleNote=row["last_handle_note"],
         )
 
     def _alarm_from_row(self, row: sqlite3.Row) -> Alarm:
@@ -1309,6 +1396,9 @@ class InspectionService:
             suppressedCount=row["suppressed_count"],
             reopenCount=row["reopen_count"],
             createdAt=_dt(row["created_at"]),
+            lastHandledBy=row["last_handled_by"],
+            lastHandledAt=_dt(row["last_handled_at"]),
+            lastHandleNote=row["last_handle_note"],
         )
 
     def _event_from_row(self, row: sqlite3.Row) -> EventItem:
@@ -1332,6 +1422,9 @@ class InspectionService:
             latestFrameId=row["best_frame_id"],
             latestImageUrl=row["best_annotated_image_url"] or row["best_image_url"],
             adviceStatus=row["advice_status"],
+            lastHandledBy=row["last_handled_by"],
+            lastHandledAt=_dt(row["last_handled_at"]),
+            lastHandleNote=row["last_handle_note"],
         )
 
     def _advice_from_row(self, row: sqlite3.Row) -> Advice:

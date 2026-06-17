@@ -1,56 +1,124 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { getAdvice, getDashboard, getEvents, getRealtimeSnapshot, getReports, getSystemOverview } from "./api/client";
-import { mockAdvice, mockDashboard, mockEvents, mockRealtimeSnapshot, mockReports, mockSystemOverview } from "./data/mockData";
+import {
+  getAdvice,
+  getAlarms,
+  getDashboard,
+  getDevices,
+  getEvents,
+  getFaults,
+  getRealtimeSnapshot,
+  getReports,
+  getSystemOverview,
+  updateAlarmStatus,
+  updateFaultStatus
+} from "./api/client";
+import { clearDemoAdminSession, hasDemoAdminSession } from "./auth/session";
+import { Icon, type IconName } from "./components/Icon";
+import { AssetsPage } from "./pages/AssetsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FaultCenterPage } from "./pages/FaultCenterPage";
+import { LoginPage } from "./pages/LoginPage";
 import { RealtimePage } from "./pages/RealtimePage";
 import { ReportsPage } from "./pages/ReportsPage";
-import type { Dashboard, EventItem, ReportSummary, RealtimeSnapshot, SystemOverview } from "./types/contracts";
+import { useTheme } from "./theme/useTheme";
+import type { Alarm, Dashboard, DataSource, Device, EventItem, Fault, ProcessStatus, RepairAdvice, ReportSummary, RealtimeSnapshot, SystemOverview } from "./types/contracts";
 
-type ViewKey = "dashboard" | "realtime" | "faults" | "reports";
+type ViewKey = "dashboard" | "realtime" | "faults" | "reports" | "assets";
 
-const navItems: Array<{ key: ViewKey; label: string }> = [
-  { key: "dashboard", label: "Dashboard" },
-  { key: "realtime", label: "实时巡检" },
-  { key: "faults", label: "故障中心" },
-  { key: "reports", label: "报告中心" }
+interface AppData {
+  dashboard: Dashboard;
+  system: SystemOverview;
+  snapshot: RealtimeSnapshot;
+  events: EventItem[];
+  advice: RepairAdvice | null;
+  reports: ReportSummary[];
+  devices: Device[];
+  faults: Fault[];
+  alarms: Alarm[];
+}
+
+const navItems: Array<{ key: ViewKey; label: string; icon: IconName }> = [
+  { key: "dashboard", label: "运行总览", icon: "grid" },
+  { key: "realtime", label: "实时巡检", icon: "video" },
+  { key: "faults", label: "故障中心", icon: "alert-triangle" },
+  { key: "reports", label: "报告中心", icon: "file-text" },
+  { key: "assets", label: "系统资源", icon: "database" }
 ];
+const defaultView: ViewKey = "dashboard";
+const viewKeys = new Set<ViewKey>(navItems.map((item) => item.key));
 
 export function App() {
-  const [activeView, setActiveView] = useState<ViewKey>("dashboard");
-  const [dashboard, setDashboard] = useState<Dashboard>(mockDashboard);
-  const [system, setSystem] = useState<SystemOverview>(mockSystemOverview);
-  const [snapshot, setSnapshot] = useState<RealtimeSnapshot>(mockRealtimeSnapshot);
-  const [events, setEvents] = useState<EventItem[]>(mockEvents);
-  const [advice, setAdvice] = useState(mockAdvice);
-  const [reports, setReports] = useState<ReportSummary[]>(mockReports);
-  const [apiMode, setApiMode] = useState<"api" | "mock">("mock");
+  const { theme, toggleTheme } = useTheme();
+  const [isAuthenticated, setIsAuthenticated] = useState(() => hasDemoAdminSession());
+  const [activeView, setActiveView] = useState<ViewKey>(() => getViewFromLocation());
+  const [appData, setAppData] = useState<AppData | null>(null);
+  const [dataSources, setDataSources] = useState<Record<ViewKey, DataSource>>({
+    dashboard: "unavailable",
+    realtime: "unavailable",
+    faults: "unavailable",
+    reports: "unavailable",
+    assets: "unavailable"
+  });
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadData() {
-      const [dashboardData, systemData, snapshotData, eventData, reportData] = await Promise.all([
-        getDashboard(),
-        getSystemOverview(),
-        getRealtimeSnapshot(),
-        getEvents(),
-        getReports()
-      ]);
-      const adviceData = await getAdvice(eventData[0]?.faultId);
+      try {
+        const [dashboardResult, systemResult, snapshotResult, eventResult, reportResult, deviceResult, faultResult, alarmResult] = await Promise.all([
+          getDashboard(),
+          getSystemOverview(),
+          getRealtimeSnapshot(),
+          getEvents(),
+          getReports(),
+          getDevices(),
+          getFaults(),
+          getAlarms()
+        ]);
+        const firstFaultId = eventResult.data[0]?.faultId;
+        const adviceResult = await getAdvice(firstFaultId);
 
-      if (cancelled) {
-        return;
+        if (cancelled) {
+          return;
+        }
+
+        setAppData({
+          dashboard: dashboardResult.data,
+          system: systemResult.data,
+          snapshot: snapshotResult.data,
+          events: eventResult.data,
+          advice: adviceResult.data,
+          reports: reportResult.data,
+          devices: deviceResult.data,
+          faults: faultResult.data,
+          alarms: alarmResult.data
+        });
+        setDataSources({
+          dashboard: "api",
+          realtime: "api",
+          faults: adviceResult.source === "api" ? "api" : "unavailable",
+          reports: "api",
+          assets: "api"
+        });
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setAppData(createEmptyAppData());
+        setDataSources({
+          dashboard: "unavailable",
+          realtime: "unavailable",
+          faults: "unavailable",
+          reports: "unavailable",
+          assets: "unavailable"
+        });
       }
-
-      setDashboard(dashboardData);
-      setSystem(systemData);
-      setSnapshot(snapshotData);
-      setEvents(eventData);
-      setAdvice(adviceData);
-      setReports(reportData);
-      setApiMode(dashboardData === mockDashboard ? "mock" : "api");
     }
 
     void loadData();
@@ -58,53 +126,319 @@ export function App() {
     return () => {
       cancelled = true;
     };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    function handleLocationChange() {
+      setActiveView(getViewFromLocation());
+    }
+
+    window.addEventListener("hashchange", handleLocationChange);
+    window.addEventListener("popstate", handleLocationChange);
+
+    return () => {
+      window.removeEventListener("hashchange", handleLocationChange);
+      window.removeEventListener("popstate", handleLocationChange);
+    };
   }, []);
 
-  const page = useMemo(() => {
+  const page = (() => {
+    if (!appData) {
+      return <LoadingPage />;
+    }
+
     switch (activeView) {
       case "dashboard":
-        return <DashboardPage dashboard={dashboard} system={system} />;
+        return <DashboardPage dashboard={appData.dashboard} dataSource={dataSources.dashboard} system={appData.system} />;
       case "realtime":
-        return <RealtimePage snapshot={snapshot} />;
+        return <RealtimePage dataSource={dataSources.realtime} snapshot={appData.snapshot} />;
       case "faults":
-        return <FaultCenterPage advice={advice} events={events} />;
+        return <FaultCenterPage advice={appData.advice} dataSource={dataSources.faults} events={appData.events} onUpdateStatus={handleUpdateStatus} />;
       case "reports":
-        return <ReportsPage reports={reports} />;
+        return <ReportsPage dataSource={dataSources.reports} reports={appData.reports} />;
+      case "assets":
+        return <AssetsPage alarms={appData.alarms} dataSource={dataSources.assets} devices={appData.devices} faults={appData.faults} />;
       default:
-        return <DashboardPage dashboard={dashboard} system={system} />;
+        return <DashboardPage dashboard={appData.dashboard} dataSource={dataSources.dashboard} system={appData.system} />;
     }
-  }, [activeView, advice, dashboard, events, reports, snapshot, system]);
+  })();
+
+  async function handleUpdateStatus(event: EventItem, processStatus: ProcessStatus) {
+    const updatedFault = await updateFaultStatus(event.faultId, processStatus);
+    let updatedAlarm: Alarm | null = null;
+
+    if (event.alarmId) {
+      updatedAlarm = await updateAlarmStatus(event.alarmId, processStatus);
+    }
+
+    setAppData((currentData) => {
+      if (!currentData) {
+        return currentData;
+      }
+
+      return {
+        ...currentData,
+        events: currentData.events.map((currentEvent) =>
+          currentEvent.eventId === event.eventId
+            ? {
+                ...currentEvent,
+                processStatus,
+                lastHandledAt: updatedFault.lastHandledAt,
+                lastHandledBy: updatedFault.lastHandledBy,
+                lastHandleNote: updatedFault.lastHandleNote
+              }
+            : currentEvent
+        ),
+        faults: currentData.faults.map((currentFault) =>
+          currentFault.faultId === updatedFault.faultId ? updatedFault : currentFault
+        ),
+        alarms: updatedAlarm
+          ? currentData.alarms.map((currentAlarm) =>
+              currentAlarm.alarmId === updatedAlarm.alarmId ? updatedAlarm : currentAlarm
+            )
+          : currentData.alarms
+      };
+    });
+  }
+
+  function handleLogout() {
+    clearDemoAdminSession();
+    setAppData(null);
+    setIsAuthenticated(false);
+    navigateToView(defaultView, { replace: true });
+  }
+
+  function navigateToView(view: ViewKey, options?: { replace?: boolean }) {
+    setActiveView(view);
+
+    const targetHash = `#${view}`;
+    const currentHash = window.location.hash || "";
+
+    if (currentHash === targetHash) {
+      return;
+    }
+
+    if (options?.replace) {
+      window.history.replaceState(null, "", targetHash);
+      return;
+    }
+
+    window.history.pushState(null, "", targetHash);
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        onAuthenticated={() => {
+          setAppData(null);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
+  const activeDataSource = appData ? dataSources[activeView] : null;
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span>EdgeEye</span>
-          <strong>巡检系统</strong>
+          <span className="brand-mark" aria-hidden="true">
+            <Icon name="shield" size={20} />
+          </span>
+          <span className="brand-text">
+            <span>EdgeEye</span>
+            <strong>智能巡检平台</strong>
+          </span>
         </div>
+        <p className="nav-section-label">主导航</p>
         <nav className="nav-list" aria-label="主导航">
           {navItems.map((item) => (
             <button
               className={item.key === activeView ? "nav-item nav-item--active" : "nav-item"}
               key={item.key}
-              onClick={() => setActiveView(item.key)}
+              onClick={() => navigateToView(item.key)}
               type="button"
             >
+              <Icon name={item.icon} size={18} />
               {item.label}
             </button>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <span className="avatar" aria-hidden="true">A</span>
+            <span className="user-meta">
+              <strong>管理员</strong>
+              <span>admin · 在线</span>
+            </span>
+          </div>
+          <button className="logout-button" onClick={handleLogout} type="button">
+            <Icon name="log-out" size={16} />
+            退出登录
+          </button>
+        </div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Member 4 + Member 5</span>
-            <h1>{navItems.find((item) => item.key === activeView)?.label}</h1>
+          <div className="topbar-title">
+            <span className="eyebrow">EdgeEye · 电力设备智能巡检</span>
+            <h1>
+              <Icon name={navItems.find((item) => item.key === activeView)?.icon ?? "grid"} size={24} />
+              {navItems.find((item) => item.key === activeView)?.label}
+            </h1>
           </div>
-          <div className="api-mode">{apiMode === "api" ? "API 已连接" : "Mock 数据"}</div>
+          <div className="topbar-actions">
+            <div className="api-mode">
+              <Icon name={!activeDataSource ? "activity" : activeDataSource === "api" ? "api" : "bug"} size={14} />
+              {!activeDataSource ? "连接中" : activeDataSource === "api" ? "API 已连接" : "接口不可用"}
+            </div>
+            <button
+              aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
+              className="icon-button"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "浅色模式" : "深色模式"}
+              type="button"
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+            </button>
+          </div>
         </header>
         {page}
       </section>
     </main>
   );
+}
+
+function getViewFromLocation(): ViewKey {
+  if (typeof window === "undefined") {
+    return defaultView;
+  }
+
+  const hashView = window.location.hash.replace(/^#\/?/, "");
+  return isViewKey(hashView) ? hashView : defaultView;
+}
+
+function isViewKey(value: string): value is ViewKey {
+  return viewKeys.has(value as ViewKey);
+}
+
+function LoadingPage() {
+  return (
+    <div className="page-stack">
+      <section className="panel panel--wide">
+        <div className="panel-heading">
+          <div>
+            <h2>
+              <Icon name="activity" size={18} />
+              正在连接数据
+            </h2>
+            <p>正在读取后端 API。</p>
+          </div>
+        </div>
+        <div className="loading-state" aria-live="polite" aria-label="正在加载系统数据">
+          <span className="loading-bar" />
+          <span className="loading-bar loading-bar--medium" />
+          <span className="loading-bar loading-bar--short" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function createEmptyAppData(): AppData {
+  const now = new Date().toISOString();
+
+  return {
+    dashboard: {
+      deviceCount: 0,
+      inspectionCount: 0,
+      faultCount: 0,
+      alarmCount: 0,
+      criticalAlarmCount: 0,
+      activeInspectionCount: 0,
+      unresolvedFaultCount: 0,
+      unresolvedAlarmCount: 0,
+      dataFreshness: "offline",
+      pageState: "error",
+      latestInspectionAt: null,
+      latestHighRiskAlarm: null
+    },
+    system: {
+      camera: {
+        status: "offline",
+        lastFrameAt: null,
+        lastHeartbeatAt: null,
+        message: "接口不可用",
+        degradedReason: null
+      },
+      atlas: {
+        status: "offline",
+        cpuUsage: 0,
+        memoryUsage: 0,
+        npuUsage: null,
+        lastHeartbeatAt: null,
+        message: "接口不可用",
+        degradedReason: null
+      },
+      model: {
+        status: "offline",
+        modelVersion: "N/A",
+        fps: 0,
+        latencyMs: 0,
+        lastHeartbeatAt: null,
+        message: "接口不可用",
+        degradedReason: null
+      },
+      backend: {
+        status: "offline",
+        lastHeartbeatAt: null,
+        message: "后端 API 未连接",
+        degradedReason: null
+      },
+      updatedAt: now,
+      dataFreshness: "offline",
+      activeInspectionCount: 0,
+      unresolvedFaultCount: 0,
+      unresolvedAlarmCount: 0
+    },
+    snapshot: createEmptySnapshot(),
+    events: [],
+    advice: null,
+    reports: [],
+    devices: [],
+    faults: [],
+    alarms: []
+  };
+}
+
+function createEmptySnapshot(): RealtimeSnapshot {
+  return {
+    inspectionId: "暂无巡检",
+    inspectionStatus: "pending",
+    resultStatus: "no_frame",
+    frameId: null,
+    frameSeq: null,
+    timestamp: null,
+    receivedAt: null,
+    staleAfterMs: null,
+    isKeyFrame: false,
+    uploadReason: "system_event",
+    eventKey: null,
+    eventStatus: null,
+    sampleWindow: null,
+    imageUrl: null,
+    annotatedImageUrl: null,
+    imageWidth: 1280,
+    imageHeight: 720,
+    detections: [],
+    performance: {
+      latencyMs: 0,
+      fps: 0,
+      cpuUsage: 0,
+      memoryUsage: 0,
+      npuUsage: null
+    },
+    faults: []
+  };
 }

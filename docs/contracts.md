@@ -430,7 +430,10 @@ HTTP 状态码建议：
   "bestImageUrl": "/uploads/raw/inspection-20260616-0001/frame-000021.jpg",
   "bestAnnotatedImageUrl": "/uploads/annotated/inspection-20260616-0001/frame-000021.jpg",
   "location": "2号线路A相",
-  "createdAt": "2026-06-16T10:00:00+08:00"
+  "createdAt": "2026-06-16T10:00:00+08:00",
+  "lastHandledBy": "admin",
+  "lastHandledAt": "2026-06-16T10:05:00+08:00",
+  "lastHandleNote": "reviewing"
 }
 ```
 
@@ -457,7 +460,10 @@ HTTP 状态码建议：
   "lastTriggeredAt": "2026-06-16T10:00:08+08:00",
   "suppressedCount": 5,
   "reopenCount": 0,
-  "createdAt": "2026-06-16T10:00:00+08:00"
+  "createdAt": "2026-06-16T10:00:00+08:00",
+  "lastHandledBy": "admin",
+  "lastHandledAt": "2026-06-16T10:05:00+08:00",
+  "lastHandleNote": "reviewing"
 }
 ```
 
@@ -647,7 +653,10 @@ HTTP 状态码建议：
   "lastOccurredAt": "2026-06-16T10:00:08+08:00",
   "latestFrameId": "frame-000021",
   "latestImageUrl": "/uploads/annotated/inspection-20260616-0001/frame-000021.jpg",
-  "adviceStatus": "ready"
+  "adviceStatus": "ready",
+  "lastHandledBy": "admin",
+  "lastHandledAt": "2026-06-16T10:05:00+08:00",
+  "lastHandleNote": "reviewing"
 }
 ```
 

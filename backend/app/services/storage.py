@@ -20,7 +20,34 @@ class SQLiteStore:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            self._apply_compat_migrations(connection)
             self._seed_devices(connection)
+
+    def _apply_compat_migrations(self, connection: sqlite3.Connection) -> None:
+        self._ensure_columns(
+            connection,
+            "faults",
+            {
+                "last_handled_by": "TEXT",
+                "last_handled_at": "TEXT",
+                "last_handle_note": "TEXT",
+            },
+        )
+        self._ensure_columns(
+            connection,
+            "alarms",
+            {
+                "last_handled_by": "TEXT",
+                "last_handled_at": "TEXT",
+                "last_handle_note": "TEXT",
+            },
+        )
+
+    def _ensure_columns(self, connection: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+        existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, definition in columns.items():
+            if name not in existing:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     def reset(self) -> None:
         if self.database_path.exists():
@@ -153,6 +180,9 @@ CREATE TABLE IF NOT EXISTS faults (
     location TEXT,
     created_at TEXT NOT NULL,
     rule_version TEXT NOT NULL,
+    last_handled_by TEXT,
+    last_handled_at TEXT,
+    last_handle_note TEXT,
     FOREIGN KEY (inspection_id) REFERENCES inspections(inspection_id),
     FOREIGN KEY (device_id) REFERENCES devices(device_id)
 );
@@ -172,6 +202,9 @@ CREATE TABLE IF NOT EXISTS alarms (
     reopen_count INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     rule_version TEXT NOT NULL,
+    last_handled_by TEXT,
+    last_handled_at TEXT,
+    last_handle_note TEXT,
     FOREIGN KEY (fault_id) REFERENCES faults(fault_id),
     FOREIGN KEY (device_id) REFERENCES devices(device_id)
 );

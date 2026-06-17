@@ -107,7 +107,21 @@ def test_member4_detection_advice_and_report_flow() -> None:
         json={"processStatus": "processing", "operator": "team", "note": "reviewing"},
     )
     assert patched.status_code == 200
-    assert patched.json()["data"]["processStatus"] == "processing"
+    patched_fault = patched.json()["data"]
+    assert patched_fault["processStatus"] == "processing"
+    assert patched_fault["lastHandledBy"] == "team"
+    assert patched_fault["lastHandledAt"] is not None
+    assert patched_fault["lastHandleNote"] == "reviewing"
+
+    patched_alarm = client.patch(
+        f"/api/alarms/{alarm['alarmId']}/status",
+        json={"processStatus": "processing", "operator": "team", "note": "reviewing"},
+    )
+    assert patched_alarm.status_code == 200
+    patched_alarm_data = patched_alarm.json()["data"]
+    assert patched_alarm_data["processStatus"] == "processing"
+    assert patched_alarm_data["lastHandledBy"] == "team"
+    assert patched_alarm_data["lastHandleNote"] == "reviewing"
 
     advice = client.post("/api/advice/generate", json={"faultId": fault["faultId"]})
     assert advice.status_code == 200
@@ -134,7 +148,17 @@ def test_member4_detection_advice_and_report_flow() -> None:
 
     exported = client.get(f"/api/reports/{report['reportId']}/export?format=pdf")
     assert exported.status_code == 200
-    assert exported.json()["data"]["downloadUrl"].endswith(".pdf")
+    exported_data = exported.json()["data"]
+    assert exported_data["downloadUrl"].endswith(".pdf")
+    downloaded = client.get(exported_data["downloadUrl"])
+    assert downloaded.status_code == 200
+    assert downloaded.content.startswith(b"%PDF-1.4")
+    assert exported_data["fileName"].endswith(".pdf")
+
+    refreshed_detail = client.get(f"/api/reports/{report['reportId']}")
+    assert refreshed_detail.status_code == 200
+    exports = refreshed_detail.json()["data"]["exports"]
+    assert any(item["format"] == "pdf" and item["downloadUrl"].endswith(".pdf") for item in exports)
 
     dashboard = client.get("/api/dashboard")
     assert dashboard.status_code == 200

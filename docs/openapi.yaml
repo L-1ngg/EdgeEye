@@ -1038,6 +1038,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        lastHandledBy:
+          type: string
+          nullable: true
+        lastHandledAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastHandleNote:
+          type: string
+          nullable: true
     Alarm:
       type: object
       required:
@@ -1085,6 +1095,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        lastHandledBy:
+          type: string
+          nullable: true
+        lastHandledAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastHandleNote:
+          type: string
+          nullable: true
     Advice:
       type: object
       required:
@@ -1125,6 +1145,16 @@ components:
           type: string
         adviceStatus:
           $ref: "#/components/schemas/AdviceStatus"
+        lastHandledBy:
+          type: string
+          nullable: true
+        lastHandledAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastHandleNote:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
