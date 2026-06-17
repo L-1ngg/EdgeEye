@@ -1,0 +1,41 @@
+# EdgeEye member 4 deliverable: backend service orchestration.
+# Scoped to the member 4 backend only. Other members' services
+# (edge app, frontend) are intentionally not defined here.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: edgeeye-backend:latest
+    container_name: edgeeye-backend
+    ports:
+      - "8000:8000"
+    environment:
+      EDGEEYE_DATABASE_PATH: data/edgeeye.db
+      EDGEEYE_UPLOADS_DIR: uploads
+      EDGEEYE_REPORTS_DIR: reports
+      # Provider stays in rule-template fallback by default.
+      # Set the URL/key here (or via an env_file) to enable a real LLM.
+      EDGEEYE_LLM_PROVIDER: rule-template
+      EDGEEYE_LLM_API_URL: "${EDGEEYE_LLM_API_URL:-}"
+      EDGEEYE_LLM_API_KEY: "${EDGEEYE_LLM_API_KEY:-}"
+      EDGEEYE_LLM_MODEL_NAME: "${EDGEEYE_LLM_MODEL_NAME:-rule-template}"
+      EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS: "${EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS:-300}"
+    volumes:
+      # Persist database, uploaded images and exported reports.
+      - edgeeye-data:/app/data
+      - edgeeye-uploads:/app/uploads
+      - edgeeye-reports:/app/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  edgeeye-data:
+  edgeeye-uploads:
+  edgeeye-reports:

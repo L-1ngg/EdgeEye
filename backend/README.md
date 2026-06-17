@@ -28,6 +28,9 @@ Environment variables use the `EDGEEYE_` prefix:
 - `EDGEEYE_LLM_MODEL_NAME`: model name metadata for future provider calls.
 - `EDGEEYE_LLM_TIMEOUT_SECONDS`: timeout for provider calls.
 - `EDGEEYE_LLM_MAX_RETRIES`: retry count before rule-template fallback.
+- `EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS`: window (seconds) within which a duplicate alarm key is suppressed instead of reopened. Defaults to `300`.
+
+See `.env.example` for a copyable template.
 
 When no provider is configured or the provider call fails, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
 

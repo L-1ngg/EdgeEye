@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     llm_model_name: str = "rule-template"
     llm_timeout_seconds: float = 10.0
     llm_max_retries: int = 2
+    alarm_dedup_window_seconds: int = 300
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",

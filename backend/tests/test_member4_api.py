@@ -176,6 +176,40 @@ def test_detection_upload_accepts_missing_npu_metric() -> None:
     assert system.json()["data"]["atlas"]["npuUsage"] is None
 
 
+def test_resolved_alarm_stays_closed_within_dedup_window() -> None:
+    inspection_id = start_inspection()
+    payload = detection_payload(inspection_id)
+    assert client.post("/api/detection/results", json=payload).status_code == 200
+
+    alarm = client.get("/api/alarms").json()["data"]["items"][0]
+    patched = client.patch(
+        f"/api/alarms/{alarm['alarmId']}/status",
+        json={"processStatus": "resolved", "operator": "team", "note": "fixed"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["data"]["processStatus"] == "resolved"
+
+    repeat_payload = detection_payload(inspection_id)
+    repeat_payload.update(
+        {
+            "idempotencyKey": f"{inspection_id}:frame-000002",
+            "frameId": "frame-000002",
+            "frameSeq": 2,
+        }
+    )
+    upload = client.post("/api/detection/results", json=repeat_payload)
+
+    assert upload.status_code == 200
+    assert upload.json()["data"]["alarmsCreated"] == 0
+    assert upload.json()["data"]["alarmsSuppressed"] == 1
+
+    updated_alarm = client.get("/api/alarms").json()["data"]["items"][0]
+    assert updated_alarm["alarmId"] == alarm["alarmId"]
+    assert updated_alarm["processStatus"] == "resolved"
+    assert updated_alarm["suppressedCount"] == 1
+    assert updated_alarm["reopenCount"] == 0
+
+
 def test_detection_upload_rejects_out_of_bounds_bbox() -> None:
     inspection_id = start_inspection()
     payload = detection_payload(inspection_id)

@@ -911,7 +911,11 @@ class InspectionService:
         if existing is not None:
             process_status = existing["process_status"]
             reopen_delta = 0
-            if process_status in {"resolved", "ignored"}:
+            # A closed alarm only reopens when the new occurrence falls outside the
+            # dedup window; within the window it stays suppressed (see contracts.md).
+            if process_status in {"resolved", "ignored"} and self._dedup_window_elapsed(
+                existing["last_triggered_at"], triggered_at
+            ):
                 process_status = "pending"
                 reopen_delta = 1
             connection.execute(
@@ -952,6 +956,19 @@ class InspectionService:
             ),
         )
         return "created"
+
+    def _dedup_window_elapsed(self, last_triggered_at: str | None, triggered_at: datetime) -> bool:
+        window_seconds = settings.alarm_dedup_window_seconds
+        if window_seconds <= 0:
+            return True
+        last = _dt(last_triggered_at)
+        if last is None:
+            return True
+        if last.tzinfo is None and triggered_at.tzinfo is not None:
+            last = last.replace(tzinfo=triggered_at.tzinfo)
+        elif last.tzinfo is not None and triggered_at.tzinfo is None:
+            triggered_at = triggered_at.replace(tzinfo=last.tzinfo)
+        return triggered_at - last > timedelta(seconds=window_seconds)
 
     def _generate_report(self, connection: sqlite3.Connection, inspection_id: str, generated_at: datetime) -> None:
         existing = connection.execute(
