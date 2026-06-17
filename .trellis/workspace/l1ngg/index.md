@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-06-17
+- **Total Sessions**: 6
+- **Last Active**: 2026-06-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~171 | Active |
+| `journal-1.md` | ~204 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-06-18 | Backend frontend integration follow-up | `86f5836` | `main` |
 | 5 | 2026-06-17 | Frontend dashboard demo readiness | `58582f1` | `main` |
 | 4 | 2026-06-17 | Backend Atlas hardening | `7cb13b6` | `main` |
 | 3 | 2026-06-17 | Add LLM advice provider fallback | `e4aa30a` | `main` |

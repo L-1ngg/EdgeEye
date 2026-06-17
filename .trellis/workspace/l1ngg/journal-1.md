@@ -169,3 +169,36 @@ Prepared the EdgeEye frontend demo dashboard with API-backed data loading, demo 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Backend frontend integration follow-up
+
+**Date**: 2026-06-18
+**Task**: Backend frontend integration follow-up
+**Branch**: `main`
+
+### Summary
+
+Pulled latest frontend dashboard work, verified backend/frontend integration, fixed missing-fault advice error handling, synced OpenAPI event/advice contract, added regression tests, and pushed the backend integration commit.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `86f5836` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
