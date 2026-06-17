@@ -136,3 +136,36 @@ Pulled latest teammate updates, hardened backend Atlas integration for static up
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Frontend dashboard demo readiness
+
+**Date**: 2026-06-17
+**Task**: Frontend dashboard demo readiness
+**Branch**: `main`
+
+### Summary
+
+Prepared the EdgeEye frontend demo dashboard with API-backed data loading, demo admin auth, resource and report views, realtime camera fallback handling, URL-preserved navigation, and frontend validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `58582f1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
