@@ -22,7 +22,12 @@
 - 当前 Python 版本为 `3.9.2`，OpenCV 可导入且版本为 `4.7.0`。
 - Ascend toolkit 路径存在：`/usr/local/Ascend/ascend-toolkit/7.0.RC1`，toolkit/ATC 版本文件显示 `Version=7.0.0.5.242`、`version_dir=7.0.RC1`。
 - `acl` Python 模块可导入，但导入时报告无法打开 `/dev/davinci_manager`。
-- 当前未发现 `/dev/davinci*`、`/dev/davinci_manager` 或 `/dev/video*` 设备节点；`npu-smi info` 失败，错误指向 NPU 驱动设备节点不可用。
+- 当前未发现 `/dev/davinci*` 或 `/dev/davinci_manager` 设备节点；`npu-smi info` 失败，错误指向 NPU 驱动设备节点不可用。
+- USB 摄像头插入后内核有响应：`dmesg` 显示 `Alcor Micro, Corp. PC Camera`，USB ID 为 `058f:1412`，`uvcvideo` 识别为 UVC 1.00 设备。
+- sysfs 已出现摄像头视频设备：`/sys/class/video4linux/video0` 和 `/sys/class/video4linux/video1`，major/minor 分别为 `81:0` 和 `81:1`，名称均为 `PC Camera: PC Camera`。
+- `/dev/video0` 和 `/dev/video1` 已可用；`v4l2-ctl --list-devices` 能列出 `PC Camera: PC Camera`，设备包含 `/dev/video0`、`/dev/video1`、`/dev/media0`。
+- `/dev/video0` 支持 MJPG 和 YUYV；MJPG 支持 `640x480`、`800x600`、`1280x720`、`1280x960` 等分辨率，最高可到 30 FPS。
+- 已用 `v4l2-ctl` 抓取一帧到 `/tmp/edgeeye-camera-frame.mjpg`，并用 OpenCV 从 `/dev/video0` 读取一帧保存到 `/tmp/edgeeye-camera-frame.jpg`。OpenCV 返回 `opened=True`、`ok=True`，图像尺寸为 `(480, 640, 3)`，均值约 `150`，说明帧非空。
 - 仓库当前未发现 `edge-app/`、`camera/`、`model-deploy/`、`config/`、`logs/` 目录，也未发现 `.om`、`.onnx`、`.pt`、`classes.json`、`label.names` 或演示视频/图片资产。
 
 ## Requirements
@@ -71,8 +76,8 @@
 - [ ] `EIR` 的 git 协作职责被记录：小步更新后 commit，大更新后 push，提交前检查工作区并避免混入无关文件。
 - [ ] `EIR` 的分支策略被记录：业务代码优先在新分支更新，Trellis/Agent skills/文档类小更新可按当前协作流程处理。
 - [x] 开发板基础环境信息被记录：板端标识、系统版本、CANN toolkit 版本、Python 版本、OpenCV 状态。
-- [ ] 开发板设备节点状态被解决或明确降级：NPU 设备节点、摄像头设备节点、模型资产位置。
-- [ ] 可从摄像头或视频源读取画面，至少能保存一张原始测试图片。
+- [ ] 开发板设备节点状态被解决或明确降级：NPU 设备节点、模型资产位置。
+- [x] 可从摄像头或视频源读取画面，至少能保存一张原始测试图片。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
@@ -94,8 +99,8 @@
 ## Open Questions
 
 - Atlas 开发板的商业型号仍需用户确认；目前只能从设备树看到 `Hisilicon PhosphorHi1910B evb`。
-- 当前 NPU 设备节点和摄像头设备节点不可见，需要确认驱动服务、权限、设备连接或容器/沙箱透传状态。
-- 摄像头类型和模型资产位置尚未由用户确认。
+- 当前 NPU 设备节点不可见，需要确认驱动服务、权限、设备连接或容器/沙箱透传状态。
+- 模型资产位置尚未由用户确认。
 - 后端联调地址是否已可从开发板访问尚未确认。
 - 成员2是否已经交付可转换或可直接运行的 ONNX/OM 模型尚未确认。
 
