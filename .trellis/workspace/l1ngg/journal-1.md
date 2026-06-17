@@ -103,3 +103,36 @@ Added configurable OpenAI-compatible LLM advice provider calls with timeout/retr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Backend Atlas hardening
+
+**Date**: 2026-06-17
+**Task**: Backend Atlas hardening
+**Branch**: `main`
+
+### Summary
+
+Pulled latest teammate updates, hardened backend Atlas integration for static uploads/reports, nullable NPU metrics, bbox validation, and synchronized backend/API/frontend docs and specs. Verified backend pytest and web build.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7cb13b6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
