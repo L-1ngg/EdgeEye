@@ -4,7 +4,7 @@
 
 - [x] Ask user to collect Atlas board facts: board model, OS, CANN version, Python version, camera type, network reachability.
 - [x] Re-check USB camera after repository update: `/dev/video0` is present and V4L2 can capture MJPG `640x480` test frame.
-- [ ] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
+- [x] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
 - [ ] Ask user to confirm model assets: ONNX/OM path, `classes.json`, `label.names`, input size, confidence threshold, IoU threshold.
 - [ ] Ask user to confirm backend base URL reachable from board.
 
@@ -24,17 +24,17 @@
 
 ## Phase 2: Skeleton and Config
 
-- [ ] Add edge-side directory/package only if missing.
-- [ ] Add default config and local example config covering backend URL, camera source, model paths, thresholds, upload paths, key-frame timing, outbox limits, and ACL device ID.
-- [ ] Add typed config loading with clear validation errors.
-- [ ] Add logging setup with structured fields aligned to engineering standards.
+- [x] Add edge-side directory/package only if missing.
+- [x] Add local example config covering backend URL, camera source, upload paths, and key-frame timing for the no-model realtime bridge.
+- [x] Add typed config loading with clear validation errors.
+- [x] Add logging setup with structured fields aligned to engineering standards.
 
 ## Phase 3: Frame Input
 
-- [ ] Implement video/camera source abstraction.
-- [ ] Support single-frame capture command for hardware smoke test.
-- [ ] Support continuous frame iteration with reconnect/backoff.
-- [ ] Save raw frames using `raw/{inspectionId}/{frameId}.jpg`.
+- [x] Implement video/camera source abstraction for OpenCV, ffmpeg, and V4L2 capture.
+- [x] Support single-frame capture command for hardware smoke test.
+- [x] Support continuous frame iteration with retry logging.
+- [x] Save raw frames using `raw/{inspectionId}/{frameId}.jpg`.
 
 ## Phase 4: Model Runner and Postprocess
 
@@ -49,8 +49,8 @@
 
 - [ ] Implement annotation writer and save `annotated/{inspectionId}/{frameId}.jpg`.
 - [ ] Implement key-frame selector for periodic, started, updated, resolved, manual, and system-event reasons.
-- [ ] Implement payload builder matching `DetectionUploadRequest`.
-- [ ] Implement local outbox write-before-upload and ACK marking.
+- [x] Implement payload builder matching `DetectionUploadRequest` with empty `detections` for no-model realtime display.
+- [x] Implement local outbox save on upload failure.
 - [ ] Implement backend uploader with retries and idempotency handling.
 
 ## Phase 6: Health and Operations
@@ -88,6 +88,22 @@ Results:
 - V4L2 direct capture succeeded and produced `camera-usb-video0-2026-06-18-v4l2.jpg`.
 - Current OpenCV direct camera open failed, so this remains an implementation risk.
 - Backend tests passed: `11 passed, 1 warning`.
+
+Commands run for the 2026-06-18 no-model realtime camera bridge:
+
+```bash
+python3 -m py_compile edge-app/edge_app/live_camera.py edge-app/tests/test_live_camera.py
+PYTHONPATH=edge-app python3 -m unittest discover -s edge-app/tests
+PYTHONPATH=edge-app python3 -m edge_app.live_camera --config edge-app/config/local.example.json --once --dry-run
+PYTHONPATH=edge-app python3 -m edge_app.live_camera --config edge-app/config/local.example.json --backend-url http://127.0.0.1:8000/api --max-frames 2
+curl -sS http://127.0.0.1:8000/api/inspections/inspection-20260618-0002/latest-result
+```
+
+Results:
+
+- Unit tests passed: `Ran 3 tests ... OK`.
+- Dry-run generated a valid upload payload and saved a frame.
+- Real upload created `inspection-20260618-0002`, uploaded `frame-000001` and `frame-000002`, and latest-result returned the latest frame URL and empty detection list.
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 

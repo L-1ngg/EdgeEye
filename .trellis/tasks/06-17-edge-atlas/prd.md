@@ -42,6 +42,9 @@
 - 前端实时页当前不直接连摄像头，而是通过 `web/src/api/client.ts` 先取 `/api/inspections?pageSize=1` 的最新巡检，再请求 `GET /api/inspections/{inspectionId}/latest-result`；`web/src/pages/RealtimePage.tsx` 使用 `annotatedImageUrl ?? imageUrl` 展示画面并按原图尺寸绘制检测框。
 - 2026-06-18 后端接口测试已通过：在 `backend/` 下执行 `env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest`，结果 `11 passed, 1 warning`，覆盖检测上传、latest-result、幂等冲突、bbox 越界和缺失 NPU 指标。
 - 仓库当前未发现 `edge-app/`、`camera/`、`model-deploy/`、`config/`、`logs/` 目录，也未发现 `.om`、`.onnx`、`.pt`、`classes.json`、`label.names` 或演示视频/图片资产；在系统常见目录中也未找到可直接使用的项目级 `.om` 模型文件。
+- 2026-06-18 已新增 `edge-app` 摄像头上传桥：默认使用 ffmpeg 从 `/dev/video0` 抓取 `640x480` JPEG，保存到后端 `uploads/raw/{inspectionId}/{frameId}.jpg`，并按现有 `POST /api/detection/results` 上传空 `detections` 的 `periodic_sample` 结果。
+- 当前后端不包含视觉检测模型，也不是模型推理服务；它提供 inspection lifecycle、detection upload、latest-result、fault/alarm/advice/report 等 API。视觉模型仍应在边缘端接入，后续只填充现有上传 payload 的 `detections` 字段，不应改接口参数。
+- 2026-06-18 实测真实上传成功：边缘端脚本启动 `inspection-20260618-0002`，连续上传 `frame-000001` 和 `frame-000002`，后端返回 `result-000002`、`result-000003`，`latest-result` 可返回 `/uploads/raw/inspection-20260618-0002/frame-000002.jpg`。
 
 ## Requirements
 
@@ -50,6 +53,7 @@
 - 提供边缘端运行目录和配置方案，覆盖后端地址、摄像头源、模型路径、类别文件、阈值、上传间隔、本地队列大小和图片输出目录。
 - 支持摄像头或视频文件作为输入源；真实摄像头不可用时，允许先用视频文件完成最小联调。
 - 当前小阶段只做摄像头硬件烟测和前后端接口确认，不改动模型资产、模型推理接口或后处理逻辑。
+- 在模型资产未交付前，提供无模型摄像头实时桥：上传空 `detections`，让前端可以先看到真实 USB 摄像头画面。
 - 支持单帧采集和连续读取，并记录摄像头断开、读帧失败和重连状态。
 - 支持加载成员2交付的 ONNX/OM 模型资产，保留 `best.pt -> ONNX -> ATC -> OM -> ACL` 的转换记录。
 - 板端推理预处理必须与工程规范一致：BGR 转 RGB、resize 到模型输入尺寸、归一化到 `[0, 1]`、HWC 转 CHW、增加 batch 维度、输入 `NCHW`。
@@ -96,7 +100,8 @@
 - [x] 已确认后端存在边缘端上传入口 `POST /api/detection/results`，前端实时页通过 latest-result 间接展示边缘端结果。
 - [x] 已验证后端接口测试通过，检测上传、幂等、latest-result、bbox 校验和 `npuUsage: null` 行为可用。
 - [x] 本阶段未修改模型资产、模型 runner、推理后处理或模型接口。
-- [ ] OpenCV 当前无法直接打开 `/dev/video0` 的问题需要在边缘端摄像头输入实现阶段处理，或明确改用 V4L2/ffmpeg/GStreamer 输入路径。
+- [x] 已新增无模型实时摄像头桥，按现有后端 API 上传空检测结果，前端可通过 latest-result 展示真实摄像头帧。
+- [x] OpenCV 当前无法直接打开 `/dev/video0` 的问题已通过 ffmpeg/V4L2 可替换 capture backend 绕开；默认配置使用 ffmpeg。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
@@ -121,6 +126,7 @@
 - 后端联调地址是否已可从开发板访问尚未确认。
 - 成员2是否已经交付可转换或可直接运行的 ONNX/OM 模型尚未确认。
 - 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
+- 模型资产仍未确认，下一阶段只能继续完善 capture/upload/outbox 或接入 mock 检测；不能实现真实 YOLO/ACL 检测。
 
 ## Notes
 

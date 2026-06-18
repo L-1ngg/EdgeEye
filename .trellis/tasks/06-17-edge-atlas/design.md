@@ -30,6 +30,8 @@ backend uploader
 
 2026-06-18 小阶段只确认摄像头硬件和前后端接口，不修改模型资产、模型 runner 或推理后处理。当前证据显示 V4L2 可从 `/dev/video0` 抓取 MJPG `640x480` 帧，但当前系统 Python/OpenCV 无法直接打开 `/dev/video0`；因此 Phase 2 实现摄像头输入时必须把 capture backend 设计成可替换，不要把业务链路绑定到单一 OpenCV `VideoCapture` 路径。
 
+2026-06-18 realtime camera milestone adds a no-model bridge first: `edge-app` captures frames, writes backend-visible images, and uploads an empty detection list through the existing backend API. This is intentionally separate from the future model runner so frontend/backend realtime integration can be verified before model assets arrive.
+
 ## Proposed Directories
 
 ```text
@@ -77,6 +79,8 @@ The exact package shape can be adjusted after inspecting existing files during P
 12. Mark outbox item acknowledged only after backend returns success.
 
 当前前后端对接入口已经存在：边缘端只负责上传关键帧检测 JSON 到 `POST /api/detection/results`；前端实时页面不直接读摄像头，而是通过后端 `GET /api/inspections/{inspectionId}/latest-result` 获取 `annotatedImageUrl ?? imageUrl`、`detections` 和 `performance` 后展示。
+
+For the no-model bridge, `detections` is `[]`, `annotatedImageUrl` is `null`, and `uploadReason` is `periodic_sample`. The image still follows `/uploads/raw/{inspectionId}/{frameId}.jpg`, so the frontend can render the real frame without a contract change.
 
 ## Contracts
 
@@ -140,6 +144,7 @@ The local health surface can be an HTTP endpoint or CLI status command. It shoul
 
 - The first runnable milestone should accept a video file source so development can continue when the physical camera is unavailable.
 - For the USB camera milestone, prefer a source abstraction that can use V4L2/ffmpeg/GStreamer when OpenCV `VideoCapture` fails on the board.
+- The default live camera bridge uses ffmpeg because one-shot `v4l2-ctl` capture is slower and OpenCV direct capture is unreliable in the current board environment.
 - ACL/OM runner should be isolated behind an interface so the rest of the pipeline can be tested off-board.
 - Real secrets must not be committed. Local endpoints and credentials belong in local config, not default config.
 - Rollback is simple at Phase 2 granularity: keep debug runner and sample video path working while adding Atlas-specific code.
