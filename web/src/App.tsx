@@ -46,6 +46,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: IconName }> = [
   { key: "assets", label: "系统资源", icon: "database" }
 ];
 const defaultView: ViewKey = "dashboard";
+const realtimeRefreshMs = 1000;
 const viewKeys = new Set<ViewKey>(navItems.map((item) => item.key));
 
 export function App() {
@@ -125,6 +126,57 @@ export function App() {
 
     return () => {
       cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function refreshRealtimeSnapshot() {
+      try {
+        const snapshotResult = await getRealtimeSnapshot();
+
+        if (cancelled) {
+          return;
+        }
+
+        setAppData((currentData) => {
+          if (!currentData) {
+            return currentData;
+          }
+
+          return {
+            ...currentData,
+            snapshot: snapshotResult.data
+          };
+        });
+        setDataSources((currentSources) => ({
+          ...currentSources,
+          realtime: snapshotResult.source
+        }));
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setDataSources((currentSources) => ({
+          ...currentSources,
+          realtime: "unavailable"
+        }));
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshRealtimeSnapshot();
+    }, realtimeRefreshMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [isAuthenticated]);
 

@@ -24,14 +24,14 @@
 
 ## Phase 2: Skeleton and Config
 
-- [x] Add edge-side directory/package only if missing.
-- [x] Add local example config covering backend URL, camera source, upload paths, and key-frame timing for the no-model realtime bridge.
+- [x] Move the no-model realtime bridge into the backend process so only backend and frontend startup commands are required.
+- [x] Add backend configuration covering camera source, capture backend, upload paths, and key-frame timing for the no-model realtime bridge.
 - [x] Add typed config loading with clear validation errors.
 - [x] Add logging setup with structured fields aligned to engineering standards.
 
 ## Phase 3: Frame Input
 
-- [x] Implement video/camera source abstraction for OpenCV, ffmpeg, and V4L2 capture.
+- [x] Implement video/camera source abstraction for ffmpeg and V4L2 capture.
 - [x] Support single-frame capture command for hardware smoke test.
 - [x] Support continuous frame iteration with retry logging.
 - [x] Save raw frames using `raw/{inspectionId}/{frameId}.jpg`.
@@ -49,12 +49,13 @@
 
 - [ ] Implement annotation writer and save `annotated/{inspectionId}/{frameId}.jpg`.
 - [ ] Implement key-frame selector for periodic, started, updated, resolved, manual, and system-event reasons.
-- [x] Implement payload builder matching `DetectionUploadRequest` with empty `detections` for no-model realtime display.
+- [x] Implement payload builder matching `DetectionUploadRequest` with empty `detections` for no-model realtime display inside backend service code.
 - [x] Implement local outbox save on upload failure.
 - [ ] Implement backend uploader with retries and idempotency handling.
 
 ## Phase 6: Health and Operations
 
+- [x] Add frontend realtime polling through the existing latest-result API path.
 - [ ] Add local health surface reporting camera, model, ACL, performance, outbox, and backend status.
 - [ ] Add clear startup and shutdown lifecycle, releasing camera/model/ACL resources.
 - [ ] Add board-side runbook for environment checks, model conversion, startup, and common failures.
@@ -66,10 +67,11 @@ Run commands will be finalized after the edge package structure exists. Expected
 ```bash
 python3 ./.trellis/scripts/get_context.py
 python3 ./.trellis/scripts/task.py current --source
-python3 -m pytest edge-app/tests
-python3 edge-app/... --config edge-app/config/local.example.yaml --once
-python3 edge-app/... --config edge-app/config/local.example.yaml --source demo-video.mp4
-curl http://localhost:8000/api/health
+cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest
+cd web && bun run build
+cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+curl -sS http://127.0.0.1:8000/api/health
+curl -sS http://127.0.0.1:8000/api/inspections?pageSize=1
 ```
 
 Commands already run for the 2026-06-18 camera/interface smoke stage:
@@ -89,7 +91,7 @@ Results:
 - Current OpenCV direct camera open failed, so this remains an implementation risk.
 - Backend tests passed: `11 passed, 1 warning`.
 
-Commands run for the 2026-06-18 no-model realtime camera bridge:
+Commands run for the 2026-06-18 no-model realtime camera bridge before backend integration:
 
 ```bash
 python3 -m py_compile edge-app/edge_app/live_camera.py edge-app/tests/test_live_camera.py
@@ -104,6 +106,13 @@ Results:
 - Unit tests passed: `Ran 3 tests ... OK`.
 - Dry-run generated a valid upload payload and saved a frame.
 - Real upload created `inspection-20260618-0002`, uploaded `frame-000001` and `frame-000002`, and latest-result returned the latest frame URL and empty detection list.
+
+Current integration direction:
+
+- The standalone `edge-app` bridge is removed.
+- The backend starts the camera bridge from `app.main` startup hooks.
+- Backend tests set `settings.camera_bridge_enabled = False` to keep hardware out of pytest.
+- The frontend polls latest-result every 1 second after login, so users only start backend and frontend.
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 
