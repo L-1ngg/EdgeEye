@@ -2,7 +2,9 @@
 
 ## Phase 0: Board Facts
 
-- [ ] Ask user to collect Atlas board facts: board model, OS, CANN version, Python version, camera type, network reachability.
+- [x] Ask user to collect Atlas board facts: board model, OS, CANN version, Python version, camera type, network reachability.
+- [x] Re-check USB camera after repository update: `/dev/video0` is present and V4L2 can capture MJPG `640x480` test frame.
+- [ ] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
 - [ ] Ask user to confirm model assets: ONNX/OM path, `classes.json`, `label.names`, input size, confidence threshold, IoU threshold.
 - [ ] Ask user to confirm backend base URL reachable from board.
 
@@ -16,7 +18,9 @@
   - `docs/api-spec.md`
   - `docs/engineering-standards.md`
   - `docs/interfaces-and-deliverables.md`
-- [ ] Search for existing `edge-app`, `camera`, `model-deploy`, upload helpers, or sample payloads before creating new code.
+- [x] Search for existing `edge-app`, `camera`, `model-deploy`, upload helpers, or sample payloads before creating new code.
+- [x] Confirm backend upload route exists at `POST /api/detection/results` and frontend realtime page consumes `GET /api/inspections/{inspectionId}/latest-result`.
+- [x] Confirm current stage should not modify model assets, model runner, model inference, or postprocess logic.
 
 ## Phase 2: Skeleton and Config
 
@@ -67,6 +71,23 @@ python3 edge-app/... --config edge-app/config/local.example.yaml --once
 python3 edge-app/... --config edge-app/config/local.example.yaml --source demo-video.mp4
 curl http://localhost:8000/api/health
 ```
+
+Commands already run for the 2026-06-18 camera/interface smoke stage:
+
+```bash
+v4l2-ctl --list-devices
+v4l2-ctl --device=/dev/video0 --all
+v4l2-ctl --device=/dev/video0 --list-formats-ext
+v4l2-ctl --device=/dev/video0 --stream-mmap --stream-count=1 --stream-to=/tmp/edgeeye-video0-frame.mjpg
+python3 -c "import cv2; cap=cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2); print(cap.isOpened()); cap.release()"
+env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest
+```
+
+Results:
+
+- V4L2 direct capture succeeded and produced `camera-usb-video0-2026-06-18-v4l2.jpg`.
+- Current OpenCV direct camera open failed, so this remains an implementation risk.
+- Backend tests passed: `11 passed, 1 warning`.
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 

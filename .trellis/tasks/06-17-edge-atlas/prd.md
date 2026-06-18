@@ -31,6 +31,16 @@
 - `/dev/video0` 是 Video Capture 节点，`/dev/video1` 是 Metadata Capture 节点；`/dev/video0` 支持 MJPG 和 YUYV，已确认的测试配置是 MJPG `640x480 @ 30 FPS`，并支持 `800x600`、`1280x720`、`1280x960` 等分辨率。
 - 已保存测试截图和视频到任务目录：`camera-usb-video0-640x480.jpg`、`camera-usb-video0-640x480-warmup.jpg`、`camera-usb-video0-640x480-3s.mjpeg`。
 - OpenCV 读取 `/dev/video0` 成功，返回 `opened=True`、`ok=True`，图像尺寸为 `(480, 640, 3)`；但当前截图内容几乎全黑，说明链路可读帧，但画面需要重新对准或补光后再做演示级复测。
+- 2026-06-18 仓库更新后重新验证 USB 摄像头：`v4l2-ctl --list-devices` 仍能识别 `PC Camera: PC Camera`，`/dev/video0` 仍是 Video Capture 节点，当前格式为 MJPG `640x480 @ 30 FPS`。
+- 2026-06-18 使用 `v4l2-ctl --device=/dev/video0 --stream-mmap --stream-count=1 --stream-to=/tmp/edgeeye-video0-frame.mjpg` 直接抓帧成功，已保存证据图片 `camera-usb-video0-2026-06-18-v4l2.jpg`；该帧是 `640x480` JPEG，OpenCV `imread` 可解码为 `(480, 640, 3)`，平均亮度约 `1.83`，画面仍接近全黑。
+- 2026-06-18 当前系统 Python/OpenCV 通过 `cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2)` 打开设备失败，返回 `opened_before_read=False`；这与 V4L2 直接抓帧成功不同，后续边缘端代码应优先把“V4L2 可读、OpenCV 需兼容处理”作为摄像头输入层风险处理。
+- 仓库当前没有 `edge-app/` 边缘端业务实现目录；本阶段不修改模型资产、模型 runner 或推理逻辑，只确认摄像头链路和前后端接口入口。
+- 后端已提供边缘端上传接口：`POST /api/detection/results`，路由位于 `backend/app/api/routes/inspections.py`，请求模型为 `DetectionUploadRequest`，响应模型为 `DetectionUploadResult`。
+- `DetectionUploadRequest` 当前要求 JSON 上传，必须包含 `idempotencyKey`、`inspectionId`、`frameId`、`timestamp`、`isKeyFrame`、`uploadReason`、`imageUrl`、`imageWidth`、`imageHeight`、`detections` 和 `performance`；`annotatedImageUrl`、`frameSeq`、`deviceId`、`eventKey`、`sampleWindow` 可按场景提供。
+- 后端会校验检测框必须满足 `0 <= x1 < x2 <= imageWidth` 和 `0 <= y1 < y2 <= imageHeight`；`Performance.npuUsage` 允许为 `null`，便于开发板指标不可用时降级上传。
+- 后端会按 `idempotencyKey` 做幂等：相同内容重复上传返回 `duplicate=true`，同键不同内容返回 `IDEMPOTENCY_CONFLICT`。
+- 前端实时页当前不直接连摄像头，而是通过 `web/src/api/client.ts` 先取 `/api/inspections?pageSize=1` 的最新巡检，再请求 `GET /api/inspections/{inspectionId}/latest-result`；`web/src/pages/RealtimePage.tsx` 使用 `annotatedImageUrl ?? imageUrl` 展示画面并按原图尺寸绘制检测框。
+- 2026-06-18 后端接口测试已通过：在 `backend/` 下执行 `env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest`，结果 `11 passed, 1 warning`，覆盖检测上传、latest-result、幂等冲突、bbox 越界和缺失 NPU 指标。
 - 仓库当前未发现 `edge-app/`、`camera/`、`model-deploy/`、`config/`、`logs/` 目录，也未发现 `.om`、`.onnx`、`.pt`、`classes.json`、`label.names` 或演示视频/图片资产；在系统常见目录中也未找到可直接使用的项目级 `.om` 模型文件。
 
 ## Requirements
@@ -39,6 +49,7 @@
 
 - 提供边缘端运行目录和配置方案，覆盖后端地址、摄像头源、模型路径、类别文件、阈值、上传间隔、本地队列大小和图片输出目录。
 - 支持摄像头或视频文件作为输入源；真实摄像头不可用时，允许先用视频文件完成最小联调。
+- 当前小阶段只做摄像头硬件烟测和前后端接口确认，不改动模型资产、模型推理接口或后处理逻辑。
 - 支持单帧采集和连续读取，并记录摄像头断开、读帧失败和重连状态。
 - 支持加载成员2交付的 ONNX/OM 模型资产，保留 `best.pt -> ONNX -> ATC -> OM -> ACL` 的转换记录。
 - 板端推理预处理必须与工程规范一致：BGR 转 RGB、resize 到模型输入尺寸、归一化到 `[0, 1]`、HWC 转 CHW、增加 batch 维度、输入 `NCHW`。
@@ -81,6 +92,11 @@
 - [x] 开发板基础环境信息被记录：板端标识、系统版本、CANN toolkit 版本、Python 版本、OpenCV 状态。
 - [ ] 开发板设备节点状态被进一步确认：NPU 设备节点已可用，模型资产位置仍待确认。
 - [x] 可从摄像头或视频源读取画面，至少能保存一张原始测试图片。
+- [x] 当前 USB 摄像头可通过 V4L2 直接抓取 `640x480` JPEG 测试帧，证据图片已保存到任务目录。
+- [x] 已确认后端存在边缘端上传入口 `POST /api/detection/results`，前端实时页通过 latest-result 间接展示边缘端结果。
+- [x] 已验证后端接口测试通过，检测上传、幂等、latest-result、bbox 校验和 `npuUsage: null` 行为可用。
+- [x] 本阶段未修改模型资产、模型 runner、推理后处理或模型接口。
+- [ ] OpenCV 当前无法直接打开 `/dev/video0` 的问题需要在边缘端摄像头输入实现阶段处理，或明确改用 V4L2/ffmpeg/GStreamer 输入路径。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
@@ -104,6 +120,7 @@
 - 模型资产位置尚未由用户确认，且系统常见目录里未发现可直接使用的项目级 `.om` 模型文件。
 - 后端联调地址是否已可从开发板访问尚未确认。
 - 成员2是否已经交付可转换或可直接运行的 ONNX/OM 模型尚未确认。
+- 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
 
 ## Notes
 
