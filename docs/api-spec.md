@@ -4,7 +4,7 @@
 
 - Base URL 示例：`http://localhost:8000`
 - API 前缀：`/api`
-- 请求和响应均使用 JSON。
+- 除摄像头 MJPEG 实时流外，请求和响应均使用 JSON。
 - 当前最小联调方案中，图片由 Atlas 或边缘程序先保存为后端可访问 URL，再在 JSON 中提交。不要在 `POST /api/detection/results` 上混用 multipart。
 - 后端默认将 `EDGEEYE_UPLOADS_DIR` 挂载到 `/uploads`，将 `EDGEEYE_REPORTS_DIR` 挂载到 `/reports`。Atlas 可以按 `/uploads/raw/{inspectionId}/{frameId}.jpg` 和 `/uploads/annotated/{inspectionId}/{frameId}.jpg` 生成可展示 URL。
 - `performance.npuUsage` 在板端 NPU 指标不可读时可以为 `null`。
@@ -19,6 +19,7 @@
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | 全组 | 后端健康检查 |
 | `GET` | `/api/system/status` | 前端 | Dashboard 系统状态 |
+| `GET` | `/api/camera/stream.mjpg` | 前端 | 摄像头 MJPEG 实时画面 |
 | `POST` | `/api/inspection/start` | Atlas/前端 | 创建巡检任务 |
 | `POST` | `/api/inspections/:id/finish` | Atlas/前端 | 结束巡检任务 |
 | `POST` | `/api/inspections/:id/fail` | Atlas/前端 | 标记巡检失败 |
@@ -56,6 +57,39 @@
 用于 Dashboard 展示系统状态。
 
 响应 `data` 使用 [数据契约与接口规范](./contracts.md) 中的 `SystemOverview`。
+
+## `GET /api/camera/stream.mjpg`
+
+用于前端实时巡检页展示 USB 摄像头画面。该端点返回
+`multipart/x-mixed-replace` MJPEG 字节流，不使用 `ApiResponse` JSON 包装。
+
+行为约定：
+
+- 后端进程持有摄像头，前端不得直接访问 USB 摄像头。
+- 该流只用于实时显示，不代表检测结果上传契约。
+- 检测框、故障、性能和报告证据仍通过 `GET /api/inspections/:id/latest-result` 与 `POST /api/detection/results` 链路维护。
+- 后端默认不会连续写 MP4，也不会保存每一帧；只按 `EDGEEYE_CAMERA_INTERVAL_SECONDS` 保存低频样本，并按 `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` 清理无模型 raw 样本。
+
+响应：
+
+```http
+Content-Type: multipart/x-mixed-replace; boundary=frame
+Cache-Control: no-store
+```
+
+不可用时返回统一错误 JSON，HTTP 状态码为 `503`：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CAMERA_STREAM_UNAVAILABLE",
+    "message": "camera source is unavailable: /dev/video0",
+    "details": null
+  },
+  "timestamp": "2026-06-18T10:00:00+08:00"
+}
+```
 
 ## `POST /api/inspection/start`
 

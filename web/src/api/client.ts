@@ -16,7 +16,7 @@ import type {
   SystemOverview
 } from "../types/contracts";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
@@ -85,6 +85,10 @@ export async function getRealtimeSnapshot(): Promise<DataResult<RealtimeSnapshot
       return createNoFrameSnapshot(latestInspection);
     }
   });
+}
+
+export function getCameraStreamUrl(): string {
+  return `${API_BASE_URL}/camera/stream.mjpg`;
 }
 
 export async function getEvents(): Promise<DataResult<EventItem[]>> {
@@ -160,8 +164,8 @@ function createNoFrameSnapshot(inspection?: InspectionListItem): RealtimeSnapsho
     sampleWindow: null,
     imageUrl: null,
     annotatedImageUrl: null,
-    imageWidth: 1280,
-    imageHeight: 720,
+    imageWidth: 640,
+    imageHeight: 480,
     detections: [],
     performance: {
       latencyMs: 0,

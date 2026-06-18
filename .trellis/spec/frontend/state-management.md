@@ -47,31 +47,40 @@ fall back to mock data. Pages receive the already-shaped data plus a
 - Do not duplicate API fallback logic inside pages.
 - Do not keep demo auth credentials in more than one module.
 
-## Scenario: Realtime Snapshot Polling
+## Scenario: Realtime Stream + Snapshot Metadata
 
 ### 1. Scope / Trigger
 
-- Trigger: the realtime inspection page needs live camera frame updates without
-  changing backend API parameters or adding a stream endpoint.
-- Applies to polling server-shaped realtime data in the current dashboard shell.
+- Trigger: the realtime inspection page needs smooth camera display while
+  keeping detection/fault/performance metadata on existing backend contracts.
+- Applies to MJPEG display URL wiring plus polling server-shaped realtime data
+  in the current dashboard shell.
 
 ### 2. Signatures
 
 - API boundary: `getRealtimeSnapshot(): Promise<DataResult<RealtimeSnapshot>>`
   in `web/src/api/client.ts`.
+- Stream URL boundary: `getCameraStreamUrl(): string` in
+  `web/src/api/client.ts`, returning `/api/camera/stream.mjpg`.
 - State owner: `web/src/App.tsx` updates `appData.snapshot` and
   `dataSources.realtime`.
 - Page boundary: `RealtimePage` receives an already-shaped
-  `RealtimeSnapshot` and does not fetch.
+  `RealtimeSnapshot`, reads the stream URL from the API client, and does not
+  call `fetch` directly.
 
 ### 3. Contracts
 
-- Poll the existing latest-result chain through `getRealtimeSnapshot`; do not
-  add query/body parameters for realtime refresh.
-- Default poll interval is 1000 ms, matching the backend camera bridge default
-  capture interval.
+- Render the camera picture with `<img src={getCameraStreamUrl()} />`; the page
+  should not read `snapshot.imageUrl` as the realtime video source.
+- Poll the existing latest-result chain through `getRealtimeSnapshot` for
+  detection boxes, faults, performance, and evidence URLs; do not add query/body
+  parameters for realtime refresh.
+- Default metadata poll interval is 1000 ms. It does not need to match the
+  backend sample/evidence interval because the MJPEG stream carries the smooth
+  live view.
 - A failed poll may mark only `dataSources.realtime` as `unavailable`; keep the
   last snapshot until a later successful poll replaces it.
+- Missing latest-result metadata should not hide a healthy MJPEG stream.
 
 ### 4. Validation & Error Matrix
 
@@ -80,19 +89,27 @@ fall back to mock data. Pages receive the already-shaped data plus a
 - Backend unavailable -> set realtime data source to `unavailable`.
 - Backend has no latest result -> API client returns a typed `no_frame`
   snapshot.
+- MJPEG stream unavailable -> `RealtimePage` shows camera fallback, but polling
+  can keep reporting the latest backend metadata.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: app shell polls through the API client and pages stay presentational.
+- Good: app shell polls metadata through the API client, the page uses the API
+  client stream URL for `<img>`, and realtime display remains independent from
+  low-frequency latest-result samples.
 - Base: initial full load still populates all pages once.
 - Bad: calling `fetch` directly from `RealtimePage` or duplicating
   latest-result fallback logic.
+- Bad: using `snapshot.imageUrl` as a 1 FPS video substitute when
+  `/api/camera/stream.mjpg` is available.
 
 ### 6. Tests Required
 
 - Run TypeScript build after polling changes.
 - Verify the backend latest-result smoke shows changing `frameId` values when
   hardware is available.
+- Verify the realtime page can display `/api/camera/stream.mjpg` even while
+  `resultStatus` is `no_frame`.
 
 ### 7. Wrong vs Correct
 
@@ -102,6 +119,8 @@ fall back to mock data. Pages receive the already-shaped data plus a
 useEffect(() => {
   fetch("/api/inspections/latest-result");
 }, []);
+
+const frameSource = snapshot.imageUrl;
 ```
 
 #### Correct
@@ -109,4 +128,6 @@ useEffect(() => {
 ```typescript
 const snapshotResult = await getRealtimeSnapshot();
 setAppData((currentData) => currentData ? { ...currentData, snapshot: snapshotResult.data } : currentData);
+
+const streamSource = getCameraStreamUrl();
 ```

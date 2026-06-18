@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,9 @@ from app.services.inspection_service import current_timestamp, get_service
 logger = logging.getLogger(__name__)
 
 UPLOAD_REASON = "periodic_sample"
+MJPEG_BOUNDARY = "frame"
+JPEG_START = b"\xff\xd8"
+JPEG_END = b"\xff\xd9"
 
 
 @dataclass(frozen=True)
@@ -25,6 +29,13 @@ class CapturedFrame:
     image_url: str
     latency_ms: float
     backend: str
+
+
+@dataclass(frozen=True)
+class StreamFrame:
+    sequence: int
+    content: bytes
+    captured_at: float
 
 
 class CameraCaptureError(RuntimeError):
@@ -36,8 +47,12 @@ class CameraBridgeService:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._condition = threading.Condition()
         self._inspection_id: str | None = None
         self._active_backend: str | None = None
+        self._latest_frame: StreamFrame | None = None
+        self._stream_error: str | None = None
+        self._process: subprocess.Popen[bytes] | None = None
 
     def start(self) -> None:
         with self._lock:
@@ -51,6 +66,10 @@ class CameraBridgeService:
                 return
 
             self._stop_event.clear()
+            with self._condition:
+                self._latest_frame = None
+                self._stream_error = None
+                self._condition.notify_all()
             self._thread = threading.Thread(target=self._run, name="edgeeye-camera-bridge", daemon=True)
             self._thread.start()
             logger.info("camera bridge started")
@@ -59,11 +78,37 @@ class CameraBridgeService:
         with self._lock:
             thread = self._thread
             self._thread = None
+            self._stop_event.set()
+            self._terminate_stream_process()
+        with self._condition:
+            self._condition.notify_all()
         if thread is None:
             return
-        self._stop_event.set()
         thread.join(timeout=3)
         logger.info("camera bridge stopped")
+
+    def ensure_stream_available(self) -> None:
+        if not settings.camera_bridge_enabled:
+            raise CameraCaptureError("camera bridge is disabled")
+        if shutil.which(settings.camera_ffmpeg_path) is None:
+            raise CameraCaptureError(f"{settings.camera_ffmpeg_path} not found")
+        if not self._source_is_available():
+            raise CameraCaptureError(f"camera source is unavailable: {settings.camera_source}")
+        self.start()
+        with self._lock:
+            if self._thread is None or not self._thread.is_alive():
+                raise CameraCaptureError("camera bridge is not running")
+        self._wait_until_stream_ready(settings.camera_timeout_seconds)
+
+    def iter_mjpeg_stream(self) -> Iterator[bytes]:
+        self.ensure_stream_available()
+        last_sequence = 0
+        while not self._stop_event.is_set():
+            frame = self._wait_for_stream_frame(last_sequence, settings.camera_timeout_seconds)
+            if frame is None:
+                continue
+            last_sequence = frame.sequence
+            yield mjpeg_part(frame.content)
 
     def _source_is_available(self) -> bool:
         source = settings.camera_source
@@ -72,61 +117,136 @@ class CameraBridgeService:
         return True
 
     def _run(self) -> None:
-        frame_seq = 1
+        stream_seq = 0
+        sample_seq = 1
+        last_sample_at = 0.0
         stats = SystemStats()
+        fps_meter = FpsMeter()
         while not self._stop_event.is_set():
-            loop_started = time.monotonic()
-            payload = None
+            process: subprocess.Popen[bytes] | None = None
             try:
-                inspection_id = self._ensure_inspection()
-                frame_id = format_frame_id(frame_seq)
-                timestamp = current_timestamp()
-                captured = capture_frame(
-                    source=settings.camera_source,
-                    backend=settings.camera_capture_backend,
+                process = open_ffmpeg_mjpeg_stream(
                     ffmpeg=settings.camera_ffmpeg_path,
-                    v4l2_ctl=settings.camera_v4l2_ctl_path,
-                    uploads_dir=Path(settings.uploads_dir),
-                    inspection_id=inspection_id,
-                    frame_id=frame_id,
+                    source=settings.camera_source,
                     width=settings.camera_width,
                     height=settings.camera_height,
-                    timeout_seconds=settings.camera_timeout_seconds,
-                    preferred_backend=self._active_backend,
+                    fps=settings.camera_stream_fps,
                 )
-                self._active_backend = captured.backend
-                elapsed = max(time.monotonic() - loop_started, 0.001)
-                cpu_usage, memory_usage = stats.snapshot()
-                payload = build_camera_payload(
-                    inspection_id=inspection_id,
-                    frame_id=frame_id,
-                    frame_seq=frame_seq,
-                    timestamp=timestamp,
-                    device_id=settings.camera_device_id,
-                    image_url=captured.image_url,
-                    image_width=settings.camera_width,
-                    image_height=settings.camera_height,
-                    latency_ms=captured.latency_ms,
-                    fps=1.0 / elapsed,
-                    cpu_usage=cpu_usage,
-                    memory_usage=memory_usage,
-                )
-                result = get_service().upload_detection_result(payload)
-                logger.info(
-                    "camera frame uploaded inspection_id=%s frame_id=%s result_id=%s image_url=%s",
-                    inspection_id,
-                    frame_id,
-                    result.resultId,
-                    captured.image_url,
-                )
-                frame_seq += 1
+                with self._lock:
+                    self._process = process
+                    self._active_backend = "ffmpeg-stream"
+                for content in iter_jpeg_frames_from_process(process, self._stop_event):
+                    if self._stop_event.is_set():
+                        break
+                    now = time.monotonic()
+                    stream_seq += 1
+                    measured_fps = fps_meter.tick(now)
+                    self._publish_stream_frame(StreamFrame(sequence=stream_seq, content=content, captured_at=now))
+                    if now - last_sample_at >= settings.camera_interval_seconds:
+                        last_sample_at = now
+                        if self._save_sample_frame(content, sample_seq, stats, measured_fps):
+                            sample_seq += 1
+                if not self._stop_event.is_set():
+                    raise CameraCaptureError(read_process_error(process) or "ffmpeg camera stream exited")
             except Exception as exc:  # noqa: BLE001 - background bridge must not crash the API process.
-                logger.warning("camera bridge frame failed: %s", exc)
-                if payload is not None:
-                    save_outbox(Path(settings.camera_outbox_dir), payload, str(exc))
+                self._set_stream_error(str(exc))
+                logger.warning("camera bridge stream failed: %s", exc)
+                self._stop_event.wait(1.0)
+            finally:
+                if process is not None:
+                    terminate_process(process)
+                with self._lock:
+                    if self._process is process:
+                        self._process = None
 
-            remaining = settings.camera_interval_seconds - (time.monotonic() - loop_started)
-            self._stop_event.wait(max(remaining, 0.1))
+    def _wait_for_stream_frame(self, last_sequence: int, timeout_seconds: float) -> StreamFrame | None:
+        deadline = time.monotonic() + timeout_seconds
+        with self._condition:
+            while not self._stop_event.is_set():
+                if self._latest_frame is not None and self._latest_frame.sequence != last_sequence:
+                    return self._latest_frame
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self._condition.wait(timeout=remaining)
+        return None
+
+    def _wait_until_stream_ready(self, timeout_seconds: float) -> None:
+        deadline = time.monotonic() + timeout_seconds
+        with self._condition:
+            while self._latest_frame is None and not self._stop_event.is_set():
+                if self._stream_error:
+                    raise CameraCaptureError(self._stream_error)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise CameraCaptureError("camera stream did not produce a frame before timeout")
+                self._condition.wait(timeout=remaining)
+
+    def _publish_stream_frame(self, frame: StreamFrame) -> None:
+        with self._condition:
+            self._latest_frame = frame
+            self._stream_error = None
+            self._condition.notify_all()
+
+    def _set_stream_error(self, message: str) -> None:
+        with self._condition:
+            self._stream_error = message
+            self._condition.notify_all()
+
+    def _save_sample_frame(self, content: bytes, frame_seq: int, stats: SystemStats, fps: float) -> bool:
+        payload = None
+        try:
+            inspection_id = self._ensure_inspection()
+            frame_id = format_frame_id(frame_seq)
+            timestamp = current_timestamp()
+            captured = save_frame_bytes(
+                content=content,
+                uploads_dir=Path(settings.uploads_dir),
+                inspection_id=inspection_id,
+                frame_id=frame_id,
+                backend=self._active_backend or "ffmpeg-stream",
+            )
+            cpu_usage, memory_usage = stats.snapshot()
+            payload = build_camera_payload(
+                inspection_id=inspection_id,
+                frame_id=frame_id,
+                frame_seq=frame_seq,
+                timestamp=timestamp,
+                device_id=settings.camera_device_id,
+                image_url=captured.image_url,
+                image_width=settings.camera_width,
+                image_height=settings.camera_height,
+                latency_ms=captured.latency_ms,
+                fps=fps,
+                cpu_usage=cpu_usage,
+                memory_usage=memory_usage,
+            )
+            result = get_service().upload_detection_result(payload)
+            prune_raw_frames(
+                uploads_dir=Path(settings.uploads_dir),
+                inspection_id=inspection_id,
+                keep_count=settings.camera_max_raw_frames_per_inspection,
+            )
+            logger.info(
+                "camera sample uploaded inspection_id=%s frame_id=%s result_id=%s image_url=%s",
+                inspection_id,
+                frame_id,
+                result.resultId,
+                captured.image_url,
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001 - sampling failures should not stop realtime streaming.
+            logger.warning("camera sample failed: %s", exc)
+            if payload is not None:
+                save_outbox(Path(settings.camera_outbox_dir), payload, str(exc))
+                return True
+            return False
+
+    def _terminate_stream_process(self) -> None:
+        process = self._process
+        self._process = None
+        if process is not None:
+            terminate_process(process)
 
     def _ensure_inspection(self) -> str:
         if self._inspection_id is not None:
@@ -192,6 +312,160 @@ def build_camera_payload(
             npuUsage=None,
         ),
     )
+
+
+def save_frame_bytes(
+    *,
+    content: bytes,
+    uploads_dir: Path,
+    inspection_id: str,
+    frame_id: str,
+    backend: str,
+) -> CapturedFrame:
+    if not content:
+        raise CameraCaptureError("empty camera frame")
+    started = time.monotonic()
+    output_path = raw_frame_path(uploads_dir, inspection_id, frame_id)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(content)
+    return CapturedFrame(
+        path=output_path,
+        image_url=raw_frame_url(inspection_id, frame_id),
+        latency_ms=(time.monotonic() - started) * 1000,
+        backend=backend,
+    )
+
+
+def mjpeg_part(content: bytes) -> bytes:
+    return (
+        f"--{MJPEG_BOUNDARY}\r\n"
+        "Content-Type: image/jpeg\r\n"
+        f"Content-Length: {len(content)}\r\n"
+        "Cache-Control: no-store\r\n"
+        "\r\n"
+    ).encode("ascii") + content + b"\r\n"
+
+
+def open_ffmpeg_mjpeg_stream(
+    *,
+    ffmpeg: str,
+    source: str,
+    width: int,
+    height: int,
+    fps: int,
+) -> subprocess.Popen[bytes]:
+    if shutil.which(ffmpeg) is None:
+        raise CameraCaptureError(f"{ffmpeg} not found")
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-fflags",
+        "nobuffer",
+        "-f",
+        "v4l2",
+        "-input_format",
+        "mjpeg",
+        "-video_size",
+        f"{width}x{height}",
+        "-framerate",
+        str(fps),
+        "-i",
+        source,
+        "-an",
+        "-c:v",
+        "copy",
+        "-flush_packets",
+        "1",
+        "-f",
+        "mjpeg",
+        "-",
+    ]
+    return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def iter_jpeg_frames_from_process(
+    process: subprocess.Popen[bytes],
+    stop_event: threading.Event,
+) -> Iterator[bytes]:
+    if process.stdout is None:
+        raise CameraCaptureError("ffmpeg stream stdout is unavailable")
+    buffer = bytearray()
+    while not stop_event.is_set():
+        chunk = process.stdout.read(4096)
+        if not chunk:
+            break
+        yield from extract_jpeg_frames(buffer, chunk)
+
+
+def extract_jpeg_frames(buffer: bytearray, chunk: bytes) -> Iterator[bytes]:
+    buffer.extend(chunk)
+    while True:
+        start = buffer.find(JPEG_START)
+        if start < 0:
+            del buffer[:-1]
+            return
+        end = buffer.find(JPEG_END, start + len(JPEG_START))
+        if end < 0:
+            if start > 0:
+                del buffer[:start]
+            if len(buffer) > 10_000_000:
+                del buffer[:-1]
+            return
+        frame_end = end + len(JPEG_END)
+        frame = bytes(buffer[start:frame_end])
+        del buffer[:frame_end]
+        yield frame
+
+
+def read_process_error(process: subprocess.Popen[bytes]) -> str:
+    if process.stderr is None:
+        return ""
+    if process.poll() is None:
+        try:
+            process.wait(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            return ""
+    try:
+        message = process.stderr.read().decode("utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    return message or f"ffmpeg exited with {process.returncode}"
+
+
+def terminate_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=2)
+
+
+def prune_raw_frames(*, uploads_dir: Path, inspection_id: str, keep_count: int) -> list[Path]:
+    if keep_count <= 0:
+        return []
+    raw_dir = uploads_dir / "raw" / inspection_id
+    if not raw_dir.exists():
+        return []
+    frames = sorted(
+        (path for path in raw_dir.glob("frame-*.jpg") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+    )
+    excess_count = len(frames) - keep_count
+    if excess_count <= 0:
+        return []
+    deleted: list[Path] = []
+    for path in frames[:excess_count]:
+        try:
+            path.unlink()
+            deleted.append(path)
+        except FileNotFoundError:
+            continue
+    return deleted
 
 
 def capture_frame(
@@ -332,6 +606,24 @@ class SystemStats:
         if total_delta <= 0:
             return 0.0
         return round(max(0.0, min(100.0, (1.0 - idle_delta / total_delta) * 100.0)), 1)
+
+
+class FpsMeter:
+    def __init__(self) -> None:
+        self.previous_frame_at: float | None = None
+        self.current_fps = 0.0
+
+    def tick(self, captured_at: float) -> float:
+        if self.previous_frame_at is None:
+            self.previous_frame_at = captured_at
+            self.current_fps = float(settings.camera_stream_fps)
+            return self.current_fps
+        elapsed = captured_at - self.previous_frame_at
+        self.previous_frame_at = captured_at
+        if elapsed <= 0:
+            return self.current_fps
+        self.current_fps = 1.0 / elapsed
+        return self.current_fps
 
 
 def read_cpu_times() -> tuple[int, int] | None:

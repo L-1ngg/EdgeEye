@@ -5,7 +5,10 @@ from app.models.inspection import DetectionUploadRequest
 from app.services.camera_bridge import (
     build_camera_payload,
     capture_candidates,
+    extract_jpeg_frames,
     format_frame_id,
+    mjpeg_part,
+    prune_raw_frames,
     raw_frame_path,
     raw_frame_url,
 )
@@ -49,3 +52,39 @@ def test_capture_candidates_reuse_working_backend() -> None:
     assert capture_candidates("auto") == ["ffmpeg", "v4l2"]
     assert capture_candidates("auto", preferred_backend="ffmpeg") == ["ffmpeg", "v4l2"]
     assert capture_candidates("v4l2") == ["v4l2"]
+
+
+def test_mjpeg_part_wraps_jpeg_content() -> None:
+    frame = b"\xff\xd8image-bytes\xff\xd9"
+    part = mjpeg_part(frame)
+
+    assert part.startswith(b"--frame\r\n")
+    assert b"Content-Type: image/jpeg\r\n" in part
+    assert f"Content-Length: {len(frame)}".encode("ascii") in part
+    assert part.endswith(frame + b"\r\n")
+
+
+def test_extract_jpeg_frames_across_chunks() -> None:
+    buffer = bytearray()
+    first = list(extract_jpeg_frames(buffer, b"noise\xff\xd8one"))
+    second = list(extract_jpeg_frames(buffer, b"\xff\xd9gap\xff\xd8two\xff\xd9tail"))
+
+    assert first == []
+    assert second == [b"\xff\xd8one\xff\xd9", b"\xff\xd8two\xff\xd9"]
+
+
+def test_prune_raw_frames_keeps_newest_files(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw" / "inspection-20260618-0001"
+    raw_dir.mkdir(parents=True)
+    for index in range(4):
+        frame = raw_dir / f"frame-00000{index + 1}.jpg"
+        frame.write_bytes(b"frame")
+
+    deleted = prune_raw_frames(
+        uploads_dir=tmp_path,
+        inspection_id="inspection-20260618-0001",
+        keep_count=2,
+    )
+
+    assert [path.name for path in deleted] == ["frame-000001.jpg", "frame-000002.jpg"]
+    assert sorted(path.name for path in raw_dir.glob("*.jpg")) == ["frame-000003.jpg", "frame-000004.jpg"]

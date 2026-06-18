@@ -46,6 +46,8 @@
 - 当前后端不包含视觉检测模型，也不是模型推理服务；它提供 inspection lifecycle、detection upload、latest-result、fault/alarm/advice/report 等 API。视觉模型仍应在边缘端接入，后续只填充现有上传 payload 的 `detections` 字段，不应改接口参数。
 - 2026-06-18 后端内置桥保留与独立脚本相同的存储和 latest-result 契约；前端仍通过现有 `/api/inspections/{inspectionId}/latest-result` 展示最新帧。
 - 2026-06-18 前端已按现有 API 增加实时快照轮询：登录后每 1 秒刷新一次 `/api/inspections/{inspectionId}/latest-result` 链路，不新增接口参数或启动步骤。
+- 2026-06-19 为解决 1 FPS 抓拍轮询卡顿和 raw 文件持续增长，实时显示改为后端内置 `GET /api/camera/stream.mjpg` MJPEG 长连接；latest-result 继续负责检测框、性能、故障和报告证据数据。
+- 2026-06-19 后端摄像头桥默认使用单个 ffmpeg MJPEG 长进程作为摄像头拥有者；实时流不落盘，后台仅按 `EDGEEYE_CAMERA_INTERVAL_SECONDS` 保存低频 raw 样本，并按 `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` 清理旧样本。
 
 ## Requirements
 
@@ -55,6 +57,8 @@
 - 支持摄像头或视频文件作为输入源；真实摄像头不可用时，允许先用视频文件完成最小联调。
 - 当前小阶段只做摄像头硬件烟测和前后端接口确认，不改动模型资产、模型推理接口或后处理逻辑。
 - 在模型资产未交付前，由后端进程内置无模型摄像头实时桥：上传空 `detections`，让前端可以先看到真实 USB 摄像头画面，且用户只需要启动后端和前端。
+- 实时画面必须优先走后端 MJPEG 流，不再依赖每秒保存 JPEG 后让前端轮询图片。
+- 无模型阶段不得连续写 MP4 或保存每个视频帧；只保留 latest-result/证据所需的低频样本，并设置保留上限。
 - 支持单帧采集和连续读取，并记录摄像头断开、读帧失败和重连状态。
 - 支持加载成员2交付的 ONNX/OM 模型资产，保留 `best.pt -> ONNX -> ATC -> OM -> ACL` 的转换记录。
 - 板端推理预处理必须与工程规范一致：BGR 转 RGB、resize 到模型输入尺寸、归一化到 `[0, 1]`、HWC 转 CHW、增加 batch 维度、输入 `NCHW`。
@@ -104,6 +108,8 @@
 - [x] 已新增后端内置无模型实时摄像头桥，按现有数据契约写入空检测结果，前端可通过 latest-result 展示真实摄像头帧。
 - [x] 前端实时巡检页会自动刷新 latest-result 快照，用户只需启动后端和前端即可观察摄像头画面变化。
 - [x] OpenCV 当前无法直接打开 `/dev/video0` 的问题已通过 ffmpeg/V4L2 可替换 capture backend 绕开；默认配置使用 ffmpeg。
+- [x] 已新增后端 MJPEG 实时流 `GET /api/camera/stream.mjpg`，前端实时页优先使用该流显示画面。
+- [x] 实时显示不按视频帧落盘；无模型 raw 样本改为低频保存并限制每次巡检保留数量。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。

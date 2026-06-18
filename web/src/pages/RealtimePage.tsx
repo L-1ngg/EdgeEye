@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { getCameraStreamUrl } from "../api/client";
 import { DataSourceBadge } from "../components/DataSourceBadge";
 import { Icon } from "../components/Icon";
 import { MetricCard } from "../components/MetricCard";
@@ -14,27 +15,20 @@ interface RealtimePageProps {
 type Detection = RealtimeSnapshot["detections"][number];
 type FrameLoadState = "loading" | "loaded" | "failed";
 
-const resultTone: Record<ResultStatus, "good" | "warning" | "danger"> = {
-  ready: "good",
-  stale: "warning",
-  no_frame: "warning",
-  processing: "warning",
-  failed: "danger"
-};
-
 export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
   const [frameLoadState, setFrameLoadState] = useState<FrameLoadState>("loading");
   const npuUsage = snapshot.performance.npuUsage;
-  const hasLiveFrame = snapshot.resultStatus === "ready" || snapshot.resultStatus === "stale";
-  const frameSource = snapshot.annotatedImageUrl ?? snapshot.imageUrl;
-  const canDisplayFrame = hasLiveFrame && Boolean(frameSource) && frameLoadState === "loaded";
-  const shouldShowFrameFallback = hasLiveFrame && !canDisplayFrame;
+  const hasResultFrame = snapshot.resultStatus === "ready" || snapshot.resultStatus === "stale";
+  const streamSource = getCameraStreamUrl();
+  const canDisplayStream = frameLoadState === "loaded";
+  const canDisplayMetadata = hasResultFrame && canDisplayStream;
+  const shouldShowFrameFallback = !canDisplayStream;
   const averageConfidence = getAverageConfidence(snapshot.detections);
   const primaryDetection = snapshot.detections[0] ?? null;
 
   useEffect(() => {
-    setFrameLoadState(frameSource ? "loading" : "failed");
-  }, [frameSource]);
+    setFrameLoadState("loading");
+  }, [streamSource]);
 
   return (
     <div className="realtime-flow">
@@ -58,31 +52,30 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
             className={`inspection-canvas inspection-canvas--${snapshot.resultStatus}`}
             role="img"
             aria-label="边缘摄像头实时巡检画面和 YOLO 检测框"
+            style={{ aspectRatio: `${snapshot.imageWidth} / ${snapshot.imageHeight}` }}
           >
-            {frameSource && hasLiveFrame ? (
-              <img
-                alt=""
-                className="video-frame"
-                onError={(event) => {
-                  setFrameLoadState("failed");
-                  event.currentTarget.hidden = true;
-                }}
-                onLoad={(event) => {
-                  setFrameLoadState("loaded");
-                  event.currentTarget.hidden = false;
-                }}
-                src={frameSource}
-              />
-            ) : null}
+            <img
+              alt=""
+              className="video-frame"
+              onError={(event) => {
+                setFrameLoadState("failed");
+                event.currentTarget.hidden = true;
+              }}
+              onLoad={(event) => {
+                setFrameLoadState("loaded");
+                event.currentTarget.hidden = false;
+              }}
+              src={streamSource}
+            />
             <div className="grid-overlay" />
-            {hasLiveFrame && shouldShowFrameFallback ? (
+            {shouldShowFrameFallback ? (
               <FrameFallback
                 frameLoadState={frameLoadState}
-                hasFrameSource={Boolean(frameSource)}
+                hasFrameSource={true}
                 status={snapshot.resultStatus}
               />
             ) : null}
-            {canDisplayFrame
+            {canDisplayMetadata
               ? snapshot.detections.map((detection) => (
                   <DetectionBox
                     detection={detection}
@@ -91,32 +84,27 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
                     key={detection.detectionId}
                   />
                 ))
-              : !hasLiveFrame ? (
-              <div className="canvas-state">
-                <strong>{getStatusLabel(snapshot.resultStatus)}</strong>
-                <span>{getRealtimeStateMessage(snapshot.resultStatus)}</span>
-              </div>
-            ) : null}
+              : null}
             <div className="video-live-tag">
-              <span className={`live-dot live-dot--${canDisplayFrame ? resultTone[snapshot.resultStatus] : "warning"}`} aria-hidden="true" />
-              {canDisplayFrame ? getVideoTagText(snapshot.resultStatus) : "UNAVAILABLE"}
+              <span className={`live-dot live-dot--${canDisplayStream ? "good" : "warning"}`} aria-hidden="true" />
+              {getStreamTagText(frameLoadState)}
             </div>
-            {snapshot.resultStatus === "stale" && canDisplayFrame ? (
+            {snapshot.resultStatus === "stale" && canDisplayMetadata ? (
               <div className="canvas-alert">实时结果已过期，当前显示最后一帧。</div>
             ) : null}
           </div>
 
-          {canDisplayFrame ? (
+          {canDisplayStream ? (
             <div className="video-caption">
-              <span>Frame {snapshot.frameSeq ?? "-"}</span>
-              <span>{formatTime(snapshot.receivedAt ?? snapshot.timestamp)}</span>
+              <span>{hasResultFrame ? `Frame ${snapshot.frameSeq ?? "-"}` : "Live stream"}</span>
+              <span>{hasResultFrame ? formatTime(snapshot.receivedAt ?? snapshot.timestamp) : getRealtimeStateMessage(snapshot.resultStatus)}</span>
               <span>{snapshot.imageWidth} x {snapshot.imageHeight}</span>
             </div>
           ) : null}
         </div>
       </section>
 
-      {canDisplayFrame ? (
+      {canDisplayMetadata ? (
         <>
           <section className="metric-grid realtime-summary-grid">
             <MetricCard label="YOLO 目标数" value={snapshot.detections.length} tone={snapshot.detections.length > 0 ? "warning" : "good"} />
@@ -216,8 +204,8 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
         </>
       ) : (
         <FrameDataUnavailablePanel
-          frameLoadState={frameSource ? frameLoadState : "failed"}
-          hasFrameSource={Boolean(frameSource)}
+          frameLoadState={frameLoadState}
+          hasFrameSource={canDisplayStream}
           status={snapshot.resultStatus}
         />
       )}
@@ -323,18 +311,14 @@ function getAverageConfidence(detections: Detection[]) {
   return Math.round((total / detections.length) * 100);
 }
 
-function getVideoTagText(status: ResultStatus) {
-  switch (status) {
-    case "ready":
-      return "LIVE";
-    case "stale":
-      return "LAST FRAME";
-    case "processing":
-      return "INFERENCE";
-    case "no_frame":
-      return "WAITING";
+function getStreamTagText(state: FrameLoadState) {
+  switch (state) {
+    case "loaded":
+      return "STREAM";
+    case "loading":
+      return "CONNECTING";
     case "failed":
-      return "FAILED";
+      return "UNAVAILABLE";
     default:
       return "UNKNOWN";
   }

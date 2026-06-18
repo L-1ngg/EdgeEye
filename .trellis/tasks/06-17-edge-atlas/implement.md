@@ -26,6 +26,7 @@
 
 - [x] Move the no-model realtime bridge into the backend process so only backend and frontend startup commands are required.
 - [x] Add backend configuration covering camera source, capture backend, upload paths, and key-frame timing for the no-model realtime bridge.
+- [x] Add backend configuration for MJPEG stream FPS, low-frequency sample interval, and bounded raw-frame retention.
 - [x] Add typed config loading with clear validation errors.
 - [x] Add logging setup with structured fields aligned to engineering standards.
 
@@ -34,7 +35,7 @@
 - [x] Implement video/camera source abstraction for ffmpeg and V4L2 capture.
 - [x] Support single-frame capture command for hardware smoke test.
 - [x] Support continuous frame iteration with retry logging.
-- [x] Save raw frames using `raw/{inspectionId}/{frameId}.jpg`.
+- [x] Save sampled raw frames using `raw/{inspectionId}/{frameId}.jpg`; do not save every realtime video frame.
 
 ## Phase 4: Model Runner and Postprocess
 
@@ -55,7 +56,8 @@
 
 ## Phase 6: Health and Operations
 
-- [x] Add frontend realtime polling through the existing latest-result API path.
+- [x] Add frontend realtime display through backend MJPEG stream while keeping latest-result polling for metadata.
+- [x] Add bounded raw-frame retention for no-model samples.
 - [ ] Add local health surface reporting camera, model, ACL, performance, outbox, and backend status.
 - [ ] Add clear startup and shutdown lifecycle, releasing camera/model/ACL resources.
 - [ ] Add board-side runbook for environment checks, model conversion, startup, and common failures.
@@ -71,6 +73,7 @@ cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-pytho
 cd web && bun run build
 cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 curl -sS http://127.0.0.1:8000/api/health
+curl -sS --max-time 2 http://127.0.0.1:8000/api/camera/stream.mjpg >/tmp/edgeeye-stream-smoke.mjpg
 curl -sS http://127.0.0.1:8000/api/inspections?pageSize=1
 ```
 
@@ -112,7 +115,8 @@ Current integration direction:
 - The standalone `edge-app` bridge is removed.
 - The backend starts the camera bridge from `app.main` startup hooks.
 - Backend tests set `settings.camera_bridge_enabled = False` to keep hardware out of pytest.
-- The frontend polls latest-result every 1 second after login, so users only start backend and frontend.
+- The frontend uses `/api/camera/stream.mjpg` for smooth live video and polls latest-result every 1 second for metadata, so users only start backend and frontend.
+- The backend no longer saves every displayed frame. It samples raw frames at `EDGEEYE_CAMERA_INTERVAL_SECONDS` and prunes old no-model samples with `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION`.
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 

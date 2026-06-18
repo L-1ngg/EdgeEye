@@ -722,8 +722,15 @@ pending -> cancelled
 
 需要接口：
 
+- `GET /api/camera/stream.mjpg`
 - `GET /api/inspections/:id/latest-result`
 - 可选：`GET /api/system/status`
+
+职责边界：
+
+- `GET /api/camera/stream.mjpg` 只负责轻量实时显示，返回 MJPEG 字节流，不使用 JSON 包装。
+- `GET /api/inspections/:id/latest-result` 负责检测框、故障、性能、关键帧和报告证据 URL。
+- 后端默认不连续保存视频文件，也不保存每一帧；无模型桥只按采样间隔写 raw 样本，并限制每次巡检保留数量。
 
 必须展示：
 
