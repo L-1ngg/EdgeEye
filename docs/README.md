@@ -97,7 +97,7 @@ Atlas 开发板使用 ACL 加载 OM 推理
 
 ## 文档索引
 
-- [成员1：Atlas 开发板与边缘推理](./01-edge-atlas.md)
+- [成员1：Atlas 开发板与边缘推理](./01-edge-atlas.md)（含当前开发板、CANN、摄像头实测环境基线）
 - [成员2：数据集与视觉目标检测](./02-vision-detection.md)
 - [成员3：故障规则与大模型维修建议设计](./03-rules-advice.md)
 - [成员4：后端、数据库、报告与大模型维修建议接口](./04-backend-api.md)

@@ -34,6 +34,56 @@
 - 成员4提供的后端接口地址、字段格式和鉴权方式；
 - 全组统一遵守 [数据契约与接口规范](./contracts.md)。
 
+## 当前实测环境基线
+
+以下信息来自 2026-06-18 对当前开发板镜像和外接 USB 摄像头的实测，用于成员之间联调对齐。后续更换镜像、开发板或摄像头时，需要重新确认本节。
+
+### Atlas 与 CANN
+
+| 项目 | 当前值 |
+| --- | --- |
+| 主机名 | `davinci-mini` |
+| 系统 | `Ubuntu 22.04 LTS` |
+| 架构 | `aarch64` |
+| 内核 | `Linux 5.10.0+` |
+| 设备树标识 | `Hisilicon PhosphorHi1910B evb` |
+| Atlas 商业型号 | `Atlas 200I A2` |
+| Product Name | `IT22MMDB` |
+| NPU / Chip | `310B4` |
+| `soc_version` | `Ascend310B4` |
+| CANN / Ascend toolkit | `7.0.RC1`，版本文件显示 `7.0.0.5.242` |
+| Firmware Version | `7.0.0.5.242` |
+| `atc` 路径 | `/usr/local/Ascend/ascend-toolkit/7.0.RC1/aarch64-linux/bin/atc` |
+| `ACL_DEVICE_ID` | `0` |
+| NPU 设备节点 | `/dev/davinci0`、`/dev/davinci_manager` |
+| pyACL 状态 | `acl.init()`、`acl.rt.get_device_count()`、`acl.rt.set_device(0)` 均可成功 |
+
+当前镜像中未发现可直接用于本项目的 `.om` 目标检测模型文件。成员2仍需提供 ONNX/OM 模型、`classes.json`、`label.names`、输入尺寸和阈值参数。
+
+### 摄像头
+
+| 项目 | 当前值 |
+| --- | --- |
+| 摄像头型号 | `Alcor Micro Corp. PC Camera` |
+| USB ID | `058f:1412` |
+| 连接方式 | USB |
+| 总线信息 | `usb-xhci-hcd.1.auto-1.1` |
+| 驱动 | `uvcvideo` |
+| 采集节点 | `/dev/video0` |
+| 元数据节点 | `/dev/video1` |
+| Media 节点 | `/dev/media0` |
+| 支持格式 | `MJPG`、`YUYV` |
+| 当前测试配置 | MJPG `640x480 @ 30 FPS` |
+| 支持分辨率示例 | `640x480`、`800x600`、`1280x720`、`1280x960` |
+
+测试截图和短视频保存在当前 Trellis 任务目录中：
+
+- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480.jpg`
+- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480-warmup.jpg`
+- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480-3s.mjpeg`
+
+当前截图可证明 `/dev/video0` 能读帧，但画面几乎全黑。演示前需要将摄像头对准亮处或调整曝光后重新保存截图和视频。
+
 ## 输出
 
 边缘端需要输出：
