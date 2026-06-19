@@ -23,6 +23,8 @@ The current repository focuses on the runnable backend service, the React dashbo
 | Area | Stack | Purpose |
 | --- | --- | --- |
 | `backend/` | Python + FastAPI + SQLite | API service, inspection storage, detection upload, alarms, advice fallback, dashboard data, and report export |
+| `training/` | Python 3.12 + uv + Ultralytics | Local YOLO dataset preparation, training entry point, and ONNX export scripts |
+| `dataset/` | YOLO workspace + source notes | Ignored raw/processed data plus committed lightweight source and cleanup docs |
 | `web/` | TypeScript + React + Vite | Operational dashboard for system status, realtime inspection, fault center, reports, and assets |
 | `docs/` | Markdown + OpenAPI | Cross-member contracts, API behavior, integration notes, responsibilities, and review records |
 | `docker-compose.yml` | Docker Compose | Member 4 backend deployment scaffold with persistent volumes |
@@ -33,6 +35,7 @@ The current repository focuses on the runnable backend service, the React dashbo
 - [What Is Included](#what-is-included)
 - [Quick Start](#quick-start)
 - [Backend](#backend)
+- [Training](#training)
 - [Frontend](#frontend)
 - [Configuration](#configuration)
 - [API Surface](#api-surface)
@@ -143,6 +146,28 @@ The frontend calls `/api` by default and falls back to typed mock data when the 
 VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 ```
 
+## Training
+
+The training workspace prepares the first detector dataset with four YOLO
+classes: `insulator_normal`, `insulator_surface_damage`, `transformer_normal`,
+and `transformer_surface_damage`. Large raw archives and generated processed
+datasets stay ignored by git; commit only scripts, config, and lightweight docs.
+
+Prepare and validate the local dataset from `training/`:
+
+```bash
+uv sync
+uv run python prepare_dataset.py --overwrite
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-detector-v1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-detector-v1/classes.json \
+  --labels ../dataset/processed/edgeeye-detector-v1/label.names
+```
+
+See [training/README.md](training/README.md), [dataset/README.md](dataset/README.md),
+and [dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)
+for source mappings, class distribution, and remaining training risks.
+
 ## Configuration
 
 Backend environment variables use the `EDGEEYE_` prefix. See [backend/.env.example](backend/.env.example) for a copyable template.
@@ -218,6 +243,14 @@ cd web
 bun run build
 ```
 
+```bash
+cd training
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-detector-v1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-detector-v1/classes.json \
+  --labels ../dataset/processed/edgeeye-detector-v1/label.names
+```
+
 For documentation and API contract changes, also verify that [docs/openapi.yaml](docs/openapi.yaml) still parses and matches the implementation surface.
 
 ## Repository Layout
@@ -225,7 +258,9 @@ For documentation and API contract changes, also verify that [docs/openapi.yaml]
 ```text
 .
 ├── backend/              FastAPI service, API routes, Pydantic models, SQLite services, tests
+├── dataset/              Local dataset workspace, source notes, and cleanup reports
 ├── docs/                 Contracts, engineering standards, module documents, OpenAPI spec
+├── training/             YOLO dataset preparation, training, and ONNX export scripts
 ├── web/                  React + Vite dashboard frontend
 ├── docker-compose.yml    Backend deployment scaffold
 └── README.md             Project entry point

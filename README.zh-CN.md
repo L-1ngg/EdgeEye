@@ -23,6 +23,8 @@ EdgeEye 用于打通边缘侧巡检数据、后端持久化、告警生成、维
 | 区域 | 技术栈 | 作用 |
 | --- | --- | --- |
 | `backend/` | Python + FastAPI + SQLite | API 服务、巡检存储、检测结果上传、告警、维修建议降级生成、Dashboard 数据和报告导出 |
+| `training/` | Python 3.12 + uv + Ultralytics | 本地 YOLO 数据集准备、训练入口和 ONNX 导出脚本 |
+| `dataset/` | YOLO 工作区 + 数据源说明 | 被忽略的原始/处理后数据，以及轻量数据源和清洗报告文档 |
 | `web/` | TypeScript + React + Vite | 系统状态、实时巡检、故障中心、报告中心和资源视图 |
 | `docs/` | Markdown + OpenAPI | 跨成员数据契约、API 行为、联调说明、职责边界和审查记录 |
 | `docker-compose.yml` | Docker Compose | 成员 4 后端部署脚手架和持久化卷配置 |
@@ -33,6 +35,7 @@ EdgeEye 用于打通边缘侧巡检数据、后端持久化、告警生成、维
 - [当前能力](#当前能力)
 - [快速启动](#快速启动)
 - [后端](#后端)
+- [训练](#训练)
 - [前端](#前端)
 - [配置](#配置)
 - [API 概览](#api-概览)
@@ -143,6 +146,28 @@ bun run build
 VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 ```
 
+## 训练
+
+训练工作区用于准备第一版检测模型数据集，包含四个 YOLO 类别：
+`insulator_normal`、`insulator_surface_damage`、`transformer_normal` 和
+`transformer_surface_damage`。大型原始归档和生成后的 processed 数据不进
+git，只提交脚本、配置和轻量文档。
+
+在 `training/` 目录准备并校验本地数据集：
+
+```bash
+uv sync
+uv run python prepare_dataset.py --overwrite
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-detector-v1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-detector-v1/classes.json \
+  --labels ../dataset/processed/edgeeye-detector-v1/label.names
+```
+
+数据源映射、类别分布和剩余训练风险见
+[training/README.md](training/README.md)、[dataset/README.md](dataset/README.md)
+和 [dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)。
+
 ## 配置
 
 后端环境变量统一使用 `EDGEEYE_` 前缀。可参考 [backend/.env.example](backend/.env.example)。
@@ -218,6 +243,14 @@ cd web
 bun run build
 ```
 
+```bash
+cd training
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-detector-v1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-detector-v1/classes.json \
+  --labels ../dataset/processed/edgeeye-detector-v1/label.names
+```
+
 涉及文档和 API 契约变更时，还需要确认 [docs/openapi.yaml](docs/openapi.yaml) 能正常解析，并且与实际接口面保持一致。
 
 ## 仓库结构
@@ -225,7 +258,9 @@ bun run build
 ```text
 .
 ├── backend/              FastAPI 服务、API 路由、Pydantic 模型、SQLite 服务、测试
+├── dataset/              本地数据集工作区、数据源说明和清洗报告
 ├── docs/                 契约、工程规范、模块文档、OpenAPI 规范
+├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
 ├── web/                  React + Vite 仪表盘前端
 ├── docker-compose.yml    后端部署脚手架
 ├── README.md             英文项目入口
