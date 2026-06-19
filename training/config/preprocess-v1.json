@@ -1,0 +1,18 @@
+{
+  "version": "preprocess-v1",
+  "inputWidth": 640,
+  "inputHeight": 640,
+  "colorFormat": "RGB",
+  "layout": "NCHW",
+  "normalize": {
+    "mean": [0, 0, 0],
+    "std": [255, 255, 255]
+  },
+  "confidenceThreshold": 0.25,
+  "nmsThreshold": 0.45,
+  "notes": [
+    "OpenCV reads images as BGR; convert BGR to RGB before inference.",
+    "Resize or letterbox to 640x640 consistently with the exported YOLO model.",
+    "Normalize pixel values to [0, 1], then transpose HWC to CHW and add batch dimension."
+  ]
+}

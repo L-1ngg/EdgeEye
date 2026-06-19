@@ -20,3 +20,19 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Large local datasets and model artifacts
+dataset/raw/
+dataset/staging/
+dataset/processed/
+dataset/downloads/
+dataset/cache/
+dataset/*.zip
+dataset/*.tar
+*.zip
+*.tar
+training/runs/
+models/
+*.pt
+*.onnx
+*.om

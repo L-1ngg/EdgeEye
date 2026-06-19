@@ -1,0 +1,11 @@
+path: ../../dataset/processed/edgeeye-detector-v1
+train: train/images
+val: val/images
+test: test/images
+
+nc: 4
+names:
+  0: insulator_normal
+  1: insulator_surface_damage
+  2: transformer_normal
+  3: transformer_surface_damage

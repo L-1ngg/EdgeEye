@@ -1,0 +1,26 @@
+[project]
+name = "edgeeye-training"
+version = "0.1.0"
+description = "YOLO training and export utilities for the EdgeEye detector pipeline"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy>=1.26,<3",
+    "opencv-python-headless>=4.10.0,<5",
+    "onnx>=1.16.0,<2",
+    "onnxruntime>=1.18.0,<2",
+    "pyyaml>=6.0.2,<7",
+    "torch>=2.3.0,<3",
+    "torchvision>=0.18.0,<1",
+    "tqdm>=4.66.0,<5",
+    "ultralytics>=8.3.0,<9",
+]
+
+[project.optional-dependencies]
+download = [
+    "kaggle>=1.6.17,<2",
+    "roboflow>=1.1.49,<2",
+]
+
+[tool.uv]
+package = false
