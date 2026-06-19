@@ -6,7 +6,9 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+This directory contains EdgeEye backend conventions discovered from the
+FastAPI service under `backend/`. Follow these files before changing routes,
+Pydantic models, settings, persistence, report generation, or tests.
 
 ---
 
@@ -14,24 +16,11 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | Active |
 | [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Active |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Active |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
-
----
-
-## How to Fill These Guidelines
-
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
+| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
+| [Logging Guidelines](./logging-guidelines.md) | Logging and sensitive-data boundaries | Active |
 
 ---
 
@@ -48,5 +37,7 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 ## Pre-Development Checklist
 
 - Read `directory-structure.md` before adding backend modules.
-- Read `quality-guidelines.md` before adding or changing endpoints.
+- Read `database-guidelines.md`, `error-handling.md`, and `quality-guidelines.md` before adding or changing endpoints.
+- Read `logging-guidelines.md` before adding operational diagnostics, provider calls, or exception handling.
 - Keep API response fields aligned with `docs/contracts.md` and `docs/openapi.yaml`.
+- Run `cd backend && uv run pytest` before committing backend behavior changes.

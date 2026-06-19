@@ -57,3 +57,30 @@ web/
 - `web/src/auth/session.ts`
 - `web/src/types/contracts.ts`
 - `web/src/pages/DashboardPage.tsx`
+- `web/src/pages/FaultCenterPage.tsx`
+- `web/src/components/MetricCard.tsx`
+- `web/src/components/StatusPill.tsx`
+- `web/src/theme/useTheme.ts`
+
+---
+
+## Wrong vs Correct
+
+### Wrong
+
+```typescript
+// web/src/pages/ReportsPage.tsx
+const body = await fetch("/api/reports").then((response) => response.json());
+```
+
+### Correct
+
+```typescript
+// web/src/api/client.ts
+export async function getReports(): Promise<DataResult<ReportSummary[]>> {
+  return getApiData(() => getPageItems<ReportSummary>("/reports"));
+}
+```
+
+Pages own rendering and local interactions; `src/api/client.ts` owns backend
+transport and response unwrapping.

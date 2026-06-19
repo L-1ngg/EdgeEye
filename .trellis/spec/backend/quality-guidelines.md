@@ -27,6 +27,39 @@ dependency management.
 - Keep public JSON fields in `camelCase`.
 - Keep route modules grouped by domain and registered through `app/api/router.py`.
 - Use service functions for demo data and future business logic.
+- Keep request/response schemas in `backend/app/models/`; do not define
+  Pydantic classes inside route functions.
+- Keep test databases isolated with `reset_service_for_tests()` and temporary
+  paths.
+
+---
+
+## Examples From This Codebase
+
+Thin route plus service call:
+
+```python
+@router.post("/detection/results", response_model=ApiResponse[DetectionUploadResult])
+def upload_detection_result(request: DetectionUploadRequest) -> ApiResponse[DetectionUploadResult]:
+    return ApiResponse(data=get_service().upload_detection_result(request), timestamp=current_timestamp())
+```
+
+Isolated database fixture:
+
+```python
+@pytest.fixture(autouse=True)
+def isolated_database(tmp_path):
+    reset_service_for_tests(str(tmp_path / "edgeeye-test.db"))
+```
+
+Error-envelope assertion:
+
+```python
+assert conflict.status_code == 409
+body = conflict.json()
+assert body["success"] is False
+assert body["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+```
 
 ---
 
@@ -50,3 +83,6 @@ uv run pytest
 - Are route handlers thin enough to keep business logic testable?
 - Are new dependencies reflected in `backend/pyproject.toml` and `backend/uv.lock`?
 - Were generated files excluded by `.gitignore`?
+- Does every new business error have a test that asserts the envelope code?
+- Did the change avoid committing local runtime artifacts under `backend/data/`,
+  `backend/uploads/`, or `backend/reports/`?

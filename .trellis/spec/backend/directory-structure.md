@@ -52,7 +52,51 @@ backend/
 
 ## Examples
 
-- `backend/app/api/routes/health.py`
-- `backend/app/api/routes/system.py`
-- `backend/app/models/system.py`
-- `backend/app/services/demo_data.py`
+- Route modules:
+  - `backend/app/api/routes/health.py` exposes `/api/health`.
+  - `backend/app/api/routes/inspections.py` exposes inspection lifecycle and
+    detection upload endpoints.
+  - `backend/app/api/routes/assets.py` exposes devices, faults, alarms, events,
+    and process-status updates.
+- Router registration:
+  - `backend/app/api/router.py` imports route modules and assigns path prefixes.
+- Models:
+  - `backend/app/models/inspection.py` owns inspection, detection, fault, alarm,
+    advice, report, and pagination models.
+  - `backend/app/models/responses.py` owns `ApiResponse[T]` and error payloads.
+- Services:
+  - `backend/app/services/inspection_service.py` owns database-backed business
+    behavior.
+  - `backend/app/services/storage.py` owns SQLite schema setup and compatibility
+    column additions.
+- Tests:
+  - `backend/tests/test_member4_api.py` covers the end-to-end detection,
+    advice, report, and dashboard flow.
+  - `backend/tests/conftest.py` resets an isolated SQLite database for every
+    test.
+
+---
+
+## Wrong vs Correct
+
+### Wrong
+
+```python
+# backend/app/api/routes/reports.py
+connection = sqlite3.connect("data/edgeeye.db")
+rows = connection.execute("SELECT * FROM reports").fetchall()
+```
+
+### Correct
+
+```python
+@router.get("/reports", response_model=ApiResponse[PageResult[ReportListItem]])
+def list_reports(page: int = 1, pageSize: int = 20) -> ApiResponse[PageResult[ReportListItem]]:
+    return ApiResponse(
+        data=get_service().list_reports(page=page, page_size=pageSize),
+        timestamp=current_timestamp(),
+    )
+```
+
+Route files own HTTP shape; `InspectionService` owns persistence and business
+logic.

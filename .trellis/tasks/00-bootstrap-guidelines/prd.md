@@ -21,9 +21,22 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill backend guidelines
-- [ ] Fill frontend guidelines
-- [ ] Add code examples
+- [x] Fill backend guidelines
+- [x] Fill frontend guidelines
+- [x] Add code examples
+
+Completed evidence:
+
+- Backend guidelines now describe the real FastAPI/Pydantic/SQLite layout,
+  unified `ApiResponse` and `ApiException` envelope, service-owned persistence,
+  test isolation, generated-artifact policy, and current logging boundary.
+- Frontend guidelines now describe the real React/Vite/Bun layout, API client
+  boundary, local state model, `useTheme` hook, shared component patterns,
+  centralized contract types, and build requirement.
+- Code examples reference real files and patterns such as
+  `backend/app/api/routes/inspections.py`, `backend/tests/conftest.py`,
+  `web/src/api/client.ts`, `web/src/components/MetricCard.tsx`, and
+  `web/src/theme/useTheme.ts`.
 
 ---
 

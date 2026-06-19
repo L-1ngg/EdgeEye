@@ -6,7 +6,9 @@
 
 ## Overview
 
-This directory contains guidelines for frontend development. Fill in each file with your project's specific conventions.
+This directory contains EdgeEye frontend conventions discovered from the React
+dashboard under `web/`. Follow these files before changing the app shell, API
+client, pages, components, theme hook, or contract types.
 
 ---
 
@@ -14,25 +16,12 @@ This directory contains guidelines for frontend development. Fill in each file w
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | To fill |
-| [Hook Guidelines](./hook-guidelines.md) | Custom hooks, data fetching patterns | To fill |
-| [State Management](./state-management.md) | Local state, global state, server state | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
-
----
-
-## How to Fill These Guidelines
-
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | Active |
+| [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | Active |
+| [Hook Guidelines](./hook-guidelines.md) | Custom hooks, data fetching patterns | Active |
+| [State Management](./state-management.md) | Local state, global state, server state | Active |
+| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
+| [Type Safety](./type-safety.md) | Type patterns, validation | Active |
 
 ---
 
@@ -44,10 +33,12 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 - UI framework: React.
 - Build tool: Vite.
 - Package manager: Bun.
-- Styling: plain CSS in `src/styles/` for the initial skeleton.
+- Styling: global CSS in `src/styles/global.css`, with reusable presentational
+  components in `src/components/`.
 
 ## Pre-Development Checklist
 
 - Read `directory-structure.md` before adding frontend modules.
-- Read `component-guidelines.md` and `type-safety.md` before adding views or API types.
+- Read `component-guidelines.md`, `hook-guidelines.md`, and `type-safety.md` before adding views, hooks, or API types.
 - Keep frontend API types aligned with `docs/contracts.md`.
+- Run `cd web && bun run build` before committing frontend behavior changes.
