@@ -237,3 +237,36 @@ Added the local YOLO training workspace, detector-v1 dataset preparation and val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Bootstrap project guidelines
+
+**Date**: 2026-06-19
+**Task**: Bootstrap project guidelines
+**Branch**: `main`
+
+### Summary
+
+Completed the backend and frontend Trellis specs with real EdgeEye conventions, code examples, quality checks, and archived the bootstrap guidelines task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d599b28` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
