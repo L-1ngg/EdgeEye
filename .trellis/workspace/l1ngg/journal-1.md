@@ -303,3 +303,36 @@ Completed the backend and frontend Trellis specs with real EdgeEye conventions, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Insulator model optimization candidate
+
+**Date**: 2026-06-21
+**Task**: Insulator model optimization candidate
+**Branch**: `main`
+
+### Summary
+
+Added edgeeye-insulator-v1 duplicate-aware dataset conversion, trained/exported the 30-epoch yolov8s AdamW candidate, documented metrics and handoff risks, and synchronized training docs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a65c127` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
