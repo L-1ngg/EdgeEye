@@ -270,3 +270,36 @@ Completed the backend and frontend Trellis specs with real EdgeEye conventions, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: 模型训练实现
+
+**Date**: 2026-06-21
+**Task**: 模型训练实现
+**Branch**: `main`
+
+### Summary
+
+完成 detector-v1 baseline 训练交付：记录 50 epoch 训练结果、ONNX 导出、expected-output 夹具、训练报告，以及训练层 handoff 规范。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90ffc12` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
