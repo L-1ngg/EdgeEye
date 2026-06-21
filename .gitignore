@@ -21,3 +21,14 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Model / dataset artifacts
+model/
+models/artifacts/*
+!models/artifacts/.gitkeep
+dataset/artifacts/*
+!dataset/artifacts/.gitkeep
+model-deploy/artifacts/*
+!model-deploy/artifacts/.gitkeep
+training/runs/
+training/weights/
