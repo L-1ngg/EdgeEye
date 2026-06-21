@@ -278,7 +278,7 @@ Atlas 部署记录里必须保留：
     "mean": [0, 0, 0],
     "std": [255, 255, 255]
   },
-  "confidenceThreshold": 0.5,
+  "confidenceThreshold": 0.25,
   "nmsThreshold": 0.45
 }
 ```

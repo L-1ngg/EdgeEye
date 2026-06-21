@@ -118,3 +118,82 @@ This invents a fault from a device-only model class.
 
 This preserves the current model's actual capability and lets the backend store
 device detections without creating false fault events.
+
+## Scenario: Local Smoke Baseline Artifacts
+
+### 1. Scope / Trigger
+
+- Trigger: teammate-provided sample images are used to establish an ONNX
+  baseline for later OM/ACL comparison.
+- Applies before ATC conversion and before final Atlas ACL inference code is
+  available.
+
+### 2. Signatures
+
+- Ignored sample/image output root:
+  `model-deploy/artifacts/<model-or-version>-test-images/`.
+- Tracked baseline file:
+  `model-deploy/expected-output-v1.json`.
+- Smoke command stays the adapter command:
+  `python3 model-deploy/edge_onnx_bridge.py --image <sample> --payload-output <payload>`.
+
+### 3. Contracts
+
+- Raw teammate images, generated annotated images, and generated payload JSON
+  are local artifacts and must stay under `model-deploy/artifacts/`, which is
+  ignored by Git.
+- `expected-output-v1.json` is tracked and stores stable comparison metadata:
+  model version, preprocess/classes versions, thresholds, sample-relative image
+  paths, image dimensions, expected class mapping, bbox, and confidence ranges.
+- Accuracy is not a pass/fail condition for temporary low-epoch models; payload
+  shape, class mapping, bbox bounds, and backend request-model validation are.
+
+### 4. Validation & Error Matrix
+
+- Sample image cannot be decoded -> fail the smoke command before writing the
+  baseline.
+- Generated payload fails `DetectionUploadRequest` validation -> do not update
+  `expected-output-v1.json`.
+- Generated detections drift outside confidence range or bbox baseline without
+  an intentional model/config change -> investigate before accepting the
+  baseline change.
+- Artifact path appears in `git ls-files --others --exclude-standard` -> fix
+  `.gitignore` or move the artifact before commit.
+
+### 5. Good/Base/Bad Cases
+
+- Good: five raw images and generated payloads stay ignored; the tracked
+  expected-output file explains what the later OM/ACL run should match.
+- Base: some samples produce `detections: []`; this is valid for a smoke
+  baseline when the payload still validates.
+- Bad: committing teammate raw images or generated annotated images to Git.
+
+### 6. Tests Required
+
+- Run `python3 -m json.tool model-deploy/expected-output-v1.json`.
+- Run ONNX smoke over the sample set and generate payloads.
+- Instantiate backend `DetectionUploadRequest` for every generated payload.
+- Compare generated payload image sizes, class mapping, bbox, and confidence
+  ranges against `expected-output-v1.json`.
+- Confirm sample artifacts are ignored by Git with `git check-ignore -v`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+model-deploy/artifacts/transformer-v1-test-images/raw/transformer-v1-001.jpg
+model-deploy/artifacts/transformer-v1-test-images/payloads/transformer-v1-001.json
+```
+
+Adding these generated artifacts to Git makes the repository carry local test
+data and unstable payload timestamps.
+
+#### Correct
+
+```text
+model-deploy/expected-output-v1.json
+```
+
+Track only the stable baseline metadata; keep raw images, annotated images, and
+generated payloads ignored under `model-deploy/artifacts/`.

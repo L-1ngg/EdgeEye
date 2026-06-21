@@ -64,6 +64,8 @@
 
 2026-06-21 已补充一条开发机/临时联调用的 ONNX 接入壳子，用于在最终 Atlas OM/ACL 推理完成前打通“模型输出 → EdgeEye Detection → 后端上传”链路。
 
+2026-06-22 成员2补充当前测试版模型信息：模型类型为 YOLOv8 `detect`，当前只有 1 类 `0: transformer`，输入尺寸为 `640x640`，推荐阈值为 `conf=0.25`、`iou=0.45`。该模型仅训练 3 轮，本阶段只用于跑通转换前的 ONNX 调试链路和后续 Atlas 转换/推理代码，不以识别准确率作为验收条件。
+
 当前本地模型资产：
 
 | 文件 | 用途 |
@@ -73,6 +75,8 @@
 | `model-deploy/classes-v1.json` | `class_id` 到 `category`、`deviceType`、`faultType` 的映射 |
 | `model-deploy/label.names` | 类别顺序文件，当前只有 `transformer` |
 | `model-deploy/preprocess-v1.json` | 输入尺寸、颜色通道、归一化、置信度阈值和 NMS 阈值 |
+| `model-deploy/expected-output-v1.json` | 5 张本地测试图的 ONNX smoke 基准，用于后续 OM/ACL 输出对比 |
+| `model-deploy/artifacts/transformer-v1-test-images/` | 本地 5 张测试图、标注图和 payload 输出，Git 忽略 |
 
 当前模型只输出一类：
 
@@ -89,7 +93,12 @@
 本地单图验证命令：
 
 ```bash
-python3 model-deploy/edge_onnx_bridge.py --image /path/to/image.jpg
+python3 model-deploy/edge_onnx_bridge.py \
+  --image model-deploy/artifacts/transformer-v1-test-images/raw/transformer-v1-001.jpg \
+  --frame-id frame-001 \
+  --inspection-id inspection-transformer-v1-smoke \
+  --annotated-output model-deploy/artifacts/transformer-v1-test-images/annotated/transformer-v1-001.jpg \
+  --payload-output model-deploy/artifacts/transformer-v1-test-images/payloads/transformer-v1-001.json
 ```
 
 后端已启动时可直接上传检测结果：

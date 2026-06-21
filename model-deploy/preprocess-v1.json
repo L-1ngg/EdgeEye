@@ -9,7 +9,7 @@
     "std": [255, 255, 255]
   },
   "letterbox": true,
-  "confidenceThreshold": 0.1,
+  "confidenceThreshold": 0.25,
   "nmsThreshold": 0.45,
   "output": {
     "name": "output0",

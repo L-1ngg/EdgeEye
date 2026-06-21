@@ -52,6 +52,10 @@
 - 2026-06-21 已新增 ONNX 调试桥 `model-deploy/edge_onnx_bridge.py`，配套 `classes-v1.json`、`label.names` 和 `preprocess-v1.json`；该桥可从图片运行当前 ONNX，做 YOLO detect 后处理，并生成符合 `DetectionUploadRequest` 的 payload。
 - 当前模型是单类 `transformer` detect 模型，只能映射为 `deviceType: "transformer"`、`faultType: null`；可用于设备检测展示链路，不会触发故障、告警或维修建议。
 - 当前 ONNX 调试桥已用本地样例图片跑通，并用后端 `DetectionUploadRequest` Pydantic 模型校验通过；尚未替代正式 Atlas `ONNX -> OM -> ACL` 路线。
+- 2026-06-22 成员2确认当前测试版模型信息：YOLOv8 `detect`，只有 1 类 `0: transformer`，输入尺寸 `640x640`，推荐阈值 `conf=0.25`、`iou=0.45`；该模型只训练 3 轮，只用于跑通链路，不评估识别准确率。
+- 2026-06-22 已将用户临时放在根目录 `images/` 的 5 张测试图迁移到本地 ignored artifact 目录 `model-deploy/artifacts/transformer-v1-test-images/raw/`，并重命名为 `transformer-v1-001.jpg` 到 `transformer-v1-005.jpg`。
+- 2026-06-22 已基于 5 张测试图生成本地 ONNX smoke 输出：`model-deploy/artifacts/transformer-v1-test-images/payloads/` 和 `annotated/`；所有 payload 均通过后端 `DetectionUploadRequest` 校验。
+- 2026-06-22 已新增 `model-deploy/expected-output-v1.json`，记录 5 张图的 ONNX 基准输出，用于后续 ATC 转 OM 和 Atlas ACL 推理结果对比。
 
 ## Requirements
 
@@ -117,6 +121,8 @@
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [x] 已提供本地 ONNX 调试路径 `model-deploy/edge_onnx_bridge.py`，真实 OM/ACL 暂不可用时可先用开发机 ONNX 打通检测 payload 链路。
 - [x] 当前 ONNX 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过后端请求模型边界校验。
+- [x] 成员2当前测试版模型元数据已记录：单类 `transformer`、YOLOv8 detect、输入 `640x640`、`conf=0.25`、`iou=0.45`。
+- [x] 5 张本地测试图已整理到 ignored artifact 目录并生成 ONNX smoke payload、标注图和 `expected-output-v1.json` 基准。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
 - [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前 ONNX 调试桥已实现可选 POST，但尚未在运行中的后端服务上做端到端上传复测。
 - [ ] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
@@ -135,11 +141,11 @@
 
 ## Open Questions
 
-- 模型资产位置尚未由用户确认，且系统常见目录里未发现可直接使用的项目级 `.om` 模型文件。
+- 当前 ONNX 测试模型和阈值已确认；仍未发现可直接使用的项目级 `.om` 模型文件，ATC 转换和 Atlas ACL 推理尚未执行。
 - 后端联调地址是否已可从开发板访问尚未确认。
-- 成员2是否已经交付可转换或可直接运行的 ONNX/OM 模型尚未确认。
+- 成员2后续多类别大模型尚未交付，当前只能按单类 `transformer` 设备检测链路联调。
 - 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
-- 模型资产仍未确认，下一阶段只能继续完善 capture/upload/outbox 或接入 mock 检测；不能实现真实 YOLO/ACL 检测。
+- ATC/OM/ACL 路线暂不执行；下一阶段可继续完善上传、后端可访问图片路径和后端端到端复测。
 
 ## Notes
 

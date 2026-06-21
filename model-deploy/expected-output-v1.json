@@ -1,0 +1,74 @@
+{
+  "version": "expected-output-v1",
+  "modelVersion": "detector-transformer-v1",
+  "preprocessVersion": "preprocess-v1",
+  "classesVersion": "classes-v1",
+  "modelType": "yolov8-detect",
+  "input": {
+    "width": 640,
+    "height": 640,
+    "confidenceThreshold": 0.25,
+    "nmsThreshold": 0.45
+  },
+  "classMapping": {
+    "0": {
+      "name": "transformer",
+      "category": "transformer",
+      "deviceType": "transformer",
+      "faultType": null
+    }
+  },
+  "sampleRoot": "model-deploy/artifacts/transformer-v1-test-images",
+  "notes": [
+    "This baseline is for smoke verification only. The temporary model was trained for 3 epochs, so accuracy is not an acceptance criterion.",
+    "Image files and generated payloads are local artifacts ignored by Git. Use this file to compare ONNX debug output with future OM/ACL output shape and mapping."
+  ],
+  "samples": [
+    {
+      "image": "raw/transformer-v1-001.jpg",
+      "imageWidth": 593,
+      "imageHeight": 954,
+      "expectedDetections": [
+        {
+          "category": "transformer",
+          "deviceType": "transformer",
+          "faultType": null,
+          "confidenceRange": [0.29, 0.33],
+          "bbox": [219, 316, 378, 512]
+        }
+      ]
+    },
+    {
+      "image": "raw/transformer-v1-002.jpg",
+      "imageWidth": 800,
+      "imageHeight": 600,
+      "expectedDetections": []
+    },
+    {
+      "image": "raw/transformer-v1-003.jpg",
+      "imageWidth": 640,
+      "imageHeight": 480,
+      "expectedDetections": []
+    },
+    {
+      "image": "raw/transformer-v1-004.jpg",
+      "imageWidth": 160,
+      "imageHeight": 240,
+      "expectedDetections": [
+        {
+          "category": "transformer",
+          "deviceType": "transformer",
+          "faultType": null,
+          "confidenceRange": [0.48, 0.53],
+          "bbox": [37, 124, 92, 187]
+        }
+      ]
+    },
+    {
+      "image": "raw/transformer-v1-005.jpg",
+      "imageWidth": 360,
+      "imageHeight": 240,
+      "expectedDetections": []
+    }
+  ]
+}

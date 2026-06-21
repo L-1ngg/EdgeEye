@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "docs/01-edge-atlas.md", "reason": "Atlas owner runbook and current ONNX smoke status"}
+{"file": "docs/02-vision-detection.md", "reason": "Vision teammate model handoff status and limitations"}
+{"file": "docs/engineering-standards.md", "reason": "Model artifact, preprocess, and expected-output conventions"}
+{"file": ".trellis/spec/backend/detection-upload-adapters.md", "reason": "Detection adapter payload contract for ONNX and future OM/ACL bridges"}
