@@ -5,7 +5,9 @@ description: "Wrap up the current session: verify quality gate passed, remind us
 
 # Finish Work
 
-Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.
+Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.5 before you invoke this command.
+
+Before archiving, confirm Phase 3 knowledge sync was considered. If the task changed durable project knowledge outside `.trellis/spec/` — README, docs, AGENTS/CLAUDE instructions, handoff notes, API contracts, env/config keys, deployment/test commands, or agent memory — and `neat-freak` has not run or been explicitly skipped with a reason, stop and return to workflow Phase 3.4. Do not perform document cleanup inside finish-work.
 
 ## Step 1: Survey current state
 
@@ -40,9 +42,9 @@ For each remaining dirty path, decide whether it belongs to **the current task**
 Then route:
 
 - **Any remaining path looks like current-task work** — bail out with:
-  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.4 to commit them before running ``finish-work` (Trellis command)`."
+  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.5 to commit them before running ``finish-work` (Trellis command)`."
 
-  Do NOT run `git commit` here. Do NOT prompt the user to commit. The user goes back to Phase 3.4 and the AI drives the batched commit there.
+  Do NOT run `git commit` here. Do NOT prompt the user to commit. The user goes back to Phase 3.5 and the AI drives the batched commit there.
 - **All remaining paths look unrelated** (other parallel-window work) — report them once and continue to Step 3:
   > "FYI, dirty files outside this task's scope — leaving them for the other window: `<list>`."
 - **Genuinely unsure** — ask the user once: "Are `<list>` this task's work I forgot to commit, or another window's? (commit / ignore)" — then route per their answer.
@@ -66,6 +68,6 @@ python3 ./.trellis/scripts/add_session.py \
   --summary "Brief summary"
 ```
 
-Use the work-commit hashes produced in Phase 3.4 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. This produces a `chore: record journal` commit.
+Use the work-commit hashes produced in Phase 3.5 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. This produces a `chore: record journal` commit.
 
-Final git log order: `<work commits from 3.4>` → `chore(task): archive ...` (one or more) → `chore: record journal`.
+Final git log order: `<work commits from 3.5>` → `chore(task): archive ...` (one or more) → `chore: record journal`.

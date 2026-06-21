@@ -115,13 +115,13 @@ python3 ./.trellis/scripts/get_context.py --mode phase --step <X.Y>  # detailed 
     matching enforcement line in its phase's [workflow-state:*] block. The
     breadcrumb is the only per-turn channel; if a mandatory step isn't
     mentioned there, the AI silently skips it (Phase 1 planning gate
-    skip and Phase 3.4 commit skip both manifested via this gap).
+    skip and Phase 3 mandatory-step skip both manifested via this gap).
 
   TAG ↔ PHASE scoping:
     [workflow-state:no_task]      → no active task; before Phase 1
     [workflow-state:planning]     → all of Phase 1 (status='planning')
     [workflow-state:planning-inline] → Codex inline variant of Phase 1
-    [workflow-state:in_progress]  → Phase 2 + Phase 3.1-3.4
+    [workflow-state:in_progress]  → Phase 2 + Phase 3.1-3.5
                                     (status stays 'in_progress' from
                                     task.py start until task.py archive)
     [workflow-state:in_progress-inline] → Codex inline variant of Phase 2/3
@@ -146,7 +146,7 @@ python3 ./.trellis/scripts/get_context.py --mode phase --step <X.Y>  # detailed 
 ```
 Phase 1: Plan    → classify, get task-creation consent, then write planning artifacts
 Phase 2: Execute → implement only after task status is in_progress
-Phase 3: Finish  → verify, update spec, commit, and wrap up
+Phase 3: Finish  → verify, update specs/knowledge, commit, and wrap up
 ```
 
 ### Request Triage
@@ -215,16 +215,17 @@ Inline mode: skip jsonl curation; Phase 2 reads artifacts/specs via `trellis-bef
 - 2.3 Rollback `[on demand]`
 
 <!-- Per-turn breadcrumb: shown while status='in_progress'.
-     Scope: all of Phase 2 + Phase 3.1-3.4 (status stays 'in_progress' from
+     Scope: all of Phase 2 + Phase 3.1-3.5 (status stays 'in_progress' from
      task.py start until task.py archive; only archive flips it). The body
      therefore must cover every required step from implementation through
-     commit, including Phase 3.3 spec update and Phase 3.4 commit. -->
+     commit, including Phase 3.3 spec update, Phase 3.4 knowledge sync, and
+     Phase 3.5 commit. -->
 
 Sub-agent dispatch protocol applies to all platforms and all sub-agents, including class-2 Codex/Copilot/Gemini/Qoder and `trellis-research`: every dispatch prompt starts with `Active task: <task path from task.py current>` before role-specific instructions.
 
 [workflow-state:in_progress]
 Tools: `trellis-implement` / `trellis-research` are sub-agent types only (Task/Agent tool, NOT Skill; there is no skill by these names). `trellis-update-spec` is a skill. `trellis-check` exists as both; prefer the Agent form when verifying after code changes.
-Flow: `trellis-implement` -> `trellis-check` -> `trellis-update-spec` -> commit (Phase 3.4) -> `/trellis:finish-work`.
+Flow: `trellis-implement` -> `trellis-check` -> `trellis-update-spec` -> `neat-freak` when durable project knowledge changed -> commit (Phase 3.5) -> `/trellis:finish-work`.
 Main-session default: dispatch implement/check sub-agents. Sub-agent self-exemption: if already running as `trellis-implement`, do NOT spawn another `trellis-implement` or `trellis-check`; if already running as `trellis-check`, do NOT spawn another `trellis-check` or `trellis-implement`. Dispatch is main session only.
 Dispatch prompt starts with `Active task: <task path from task.py current>`. Read context: jsonl entries -> `prd.md` -> `design.md if present` -> `implement.md if present`.
 [/workflow-state:in_progress]
@@ -235,7 +236,7 @@ Dispatch prompt starts with `Active task: <task path from task.py current>`. Rea
      instead of dispatching sub-agents. -->
 
 [workflow-state:in_progress-inline]
-Flow: `trellis-before-dev` -> edit -> `trellis-check` -> validation -> `trellis-update-spec` -> commit (Phase 3.4) -> `/trellis:finish-work`.
+Flow: `trellis-before-dev` -> edit -> `trellis-check` -> validation -> `trellis-update-spec` -> `neat-freak` when durable project knowledge changed -> commit (Phase 3.5) -> `/trellis:finish-work`.
 Do not dispatch implement/check sub-agents in inline mode.
 Read context: `prd.md` -> `design.md if present` -> `implement.md if present`, plus relevant spec/research loaded by skills.
 [/workflow-state:in_progress-inline]
@@ -244,8 +245,9 @@ Read context: `prd.md` -> `design.md if present` -> `implement.md if present`, p
 - 3.1 Quality verification `[required · repeatable]`
 - 3.2 Debug retrospective `[on demand]`
 - 3.3 Spec update `[required · once]`
-- 3.4 Commit changes `[required · once]`
-- 3.5 Wrap-up reminder
+- 3.4 Knowledge sync `[conditional · once]`
+- 3.5 Commit changes `[required · once]`
+- 3.6 Wrap-up reminder
 
 <!-- Per-turn breadcrumb: shown while status='completed'.
      Currently DEAD in normal flow: cmd_archive writes status='completed' in
@@ -256,7 +258,7 @@ Read context: `prd.md` -> `design.md if present` -> `implement.md if present`, p
      channel as the live blocks. -->
 
 [workflow-state:completed]
-Code committed. Run `/trellis:finish-work`; if dirty, return to Phase 3.4 first.
+Code committed. Run `/trellis:finish-work`; if durable project knowledge changed and `neat-freak` was skipped, return to Phase 3.4 first. If dirty, return to Phase 3.5 first.
 [/workflow-state:completed]
 
 ### Rules
@@ -589,7 +591,22 @@ Load the `trellis-update-spec` skill and review whether this task produced new k
 
 Update the docs under `.trellis/spec/` accordingly. Even if the conclusion is "nothing to update", walk through the judgment.
 
-#### 3.4 Commit changes `[required · once]`
+#### 3.4 Knowledge sync `[conditional · once]`
+
+Load the `neat-freak` skill when this task changed durable project knowledge outside `.trellis/spec/`, including:
+- README, docs, AGENTS/CLAUDE instructions, handoff notes, or project runbooks
+- API routes, payloads, enum values, environment variables, deployment commands, or test commands that should be discoverable by humans or future agents
+- Milestone-level decisions where another teammate, future agent, or downstream project needs a clean handoff
+- User requests such as "sync up", "tidy up docs", "update memory", "clean up docs", "/sync", "/neat", "同步一下", "整理文档", "整理一下", "更新记忆", "梳理一下", "收尾", "这个阶段做完了", or "新人能直接上手"
+
+Keep the boundary clear:
+- `trellis-update-spec` records executable coding contracts under `.trellis/spec/`.
+- `neat-freak` reconciles project-facing docs, root agent instructions, and agent memory against the code/task outcome.
+- `/trellis:finish-work` archives tasks and records the journal; it does not perform document cleanup.
+
+If no durable project knowledge changed, record that judgment briefly in the final status and continue to Phase 3.5. Do not run `neat-freak` for every tiny internal-only change.
+
+#### 3.5 Commit changes `[required · once]`
 
 The AI drives a batched commit of this task's code changes so `/finish-work` can run cleanly afterwards. Goal: produce work commits FIRST, then bookkeeping (archive + journal) commits land after — never interleaved.
 
@@ -599,7 +616,7 @@ The AI drives a batched commit of this task's code changes so `/finish-work` can
    ```bash
    git status --porcelain
    ```
-   Snapshot every dirty path. If the working tree is clean, skip to 3.5.
+   Snapshot every dirty path. If the working tree is clean, skip to 3.6.
 
 2. **Learn commit style** from recent history (so drafted messages blend in):
    ```bash
@@ -631,7 +648,7 @@ The AI drives a batched commit of this task's code changes so `/finish-work` can
 
 6. **On confirmation**: run `git add <files>` + `git commit -m "<msg>"` for each batch in order. Do not amend. Do not push.
 
-7. **On rejection** (user replies "不行" / "我自己来" / "manual" / any pushback on the plan): stop. Do not attempt a second plan. The user will commit by hand; you skip ahead to 3.5 once they confirm.
+7. **On rejection** (user replies "不行" / "我自己来" / "manual" / any pushback on the plan): stop. Do not attempt a second plan. The user will commit by hand; you skip ahead to 3.6 once they confirm.
 
 **Rules**:
 - No `git commit --amend` anywhere — three-stage three-commit flow (work commits → archive commit → journal commit).
@@ -639,7 +656,7 @@ The AI drives a batched commit of this task's code changes so `/finish-work` can
 - If the user wants different message wording but accepts the file grouping, edit the message and re-confirm once — but if they reject the grouping, exit to manual mode.
 - The batched plan is one prompt; do not prompt per commit.
 
-#### 3.5 Wrap-up reminder
+#### 3.6 Wrap-up reminder
 
 After the above, remind the user they can run `/finish-work` to wrap up (archive the task, record the session).
 
@@ -654,7 +671,7 @@ This section is for developers who want to modify the Trellis workflow itself. A
 Edit the corresponding step's walkthrough body in the Phase 1 / 2 / 3 sections above. Critical invariants:
 - No active task must triage first and ask for task-creation consent before creating a Trellis task.
 - Planning must distinguish lightweight PRD-only tasks from complex tasks that require `prd.md`, `design.md`, and `implement.md` before start.
-- Every required execution path must keep the Phase 3.4 commit reminder reachable before `/trellis:finish-work`.
+- Every required execution path must keep the Phase 3.5 commit reminder reachable before `/trellis:finish-work`.
 
 All tag blocks live in the `## Phase Index` section above, immediately after each phase summary:
 
@@ -663,9 +680,9 @@ All tag blocks live in the `## Phase Index` section above, immediately after eac
 | No active task (before Phase 1) | `[workflow-state:no_task]` (after the Phase Index ASCII art) |
 | All of Phase 1 (task created → ready for implementation) | `[workflow-state:planning]` (after Phase 1 summary) |
 | Codex inline Phase 1 | `[workflow-state:planning-inline]` |
-| Phase 2 + Phase 3.1–3.4 (implementation + check + wrap-up) | `[workflow-state:in_progress]` (after Phase 2 summary) |
-| Codex inline Phase 2 + Phase 3.1–3.4 | `[workflow-state:in_progress-inline]` |
-| After Phase 3.5 (archived) | `[workflow-state:completed]` (after Phase 3 summary; **currently DEAD**) |
+| Phase 2 + Phase 3.1–3.5 (implementation + check + wrap-up) | `[workflow-state:in_progress]` (after Phase 2 summary) |
+| Codex inline Phase 2 + Phase 3.1–3.5 | `[workflow-state:in_progress-inline]` |
+| After Phase 3.6 (archived) | `[workflow-state:completed]` (after Phase 3 summary; **currently DEAD**) |
 
 ### Changing the per-turn prompt text
 
