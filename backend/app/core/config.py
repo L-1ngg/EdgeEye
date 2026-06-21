@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,6 +12,20 @@ class Settings(BaseSettings):
     database_path: str = "data/edgeeye.db"
     uploads_dir: str = "uploads"
     reports_dir: str = "reports"
+    camera_bridge_enabled: bool = True
+    camera_source: str = Field(default="/dev/video0", min_length=1)
+    camera_capture_backend: Literal["ffmpeg", "v4l2", "auto"] = "ffmpeg"
+    camera_ffmpeg_path: str = Field(default="ffmpeg", min_length=1)
+    camera_v4l2_ctl_path: str = Field(default="v4l2-ctl", min_length=1)
+    camera_width: int = Field(default=640, ge=1)
+    camera_height: int = Field(default=480, ge=1)
+    camera_interval_seconds: float = Field(default=5.0, gt=0)
+    camera_stream_fps: int = Field(default=30, ge=1, le=60)
+    camera_timeout_seconds: float = Field(default=5.0, gt=0)
+    camera_max_raw_frames_per_inspection: int = Field(default=120, ge=1)
+    camera_device_id: str = Field(default="device-001", min_length=1)
+    camera_operator: str = Field(default="backend-camera", min_length=1)
+    camera_outbox_dir: str = Field(default="data/camera-outbox", min_length=1)
     llm_provider: str = "rule-template"
     llm_api_url: str | None = None
     llm_api_key: str | None = None

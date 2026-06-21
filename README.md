@@ -146,6 +146,9 @@ The frontend calls `/api` by default and falls back to typed mock data when the 
 VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 ```
 
+The realtime page refreshes the existing latest-result API path every second,
+so no separate camera process is needed when the backend bridge is enabled.
+
 ## Training
 
 The training workspace prepares the first detector dataset with four YOLO
@@ -188,6 +191,8 @@ Backend environment variables use the `EDGEEYE_` prefix. See [backend/.env.examp
 | `EDGEEYE_DATABASE_PATH` | SQLite database path | `data/edgeeye.db` |
 | `EDGEEYE_UPLOADS_DIR` | Static root served at `/uploads` | `uploads` |
 | `EDGEEYE_REPORTS_DIR` | Static root served at `/reports` | `reports` |
+| `EDGEEYE_CAMERA_BRIDGE_ENABLED` | Start the built-in no-model USB camera bridge when `/dev/video0` is available | `true` |
+| `EDGEEYE_CAMERA_CAPTURE_BACKEND` | Camera capture backend: `ffmpeg`, `v4l2`, or `auto` | `ffmpeg` |
 | `EDGEEYE_LLM_PROVIDER` | Provider selector | `rule-template` |
 | `EDGEEYE_LLM_API_URL` | Optional OpenAI-compatible chat-completions endpoint | unset |
 | `EDGEEYE_LLM_API_KEY` | Backend-only LLM API key | unset |

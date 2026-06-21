@@ -10,6 +10,7 @@ backend/data/*.db
 backend/data/*.db-*
 backend/uploads/
 backend/reports/
+backend/data/camera-outbox/
 
 # Node / Vite
 node_modules/
@@ -29,11 +30,21 @@ dataset/downloads/
 dataset/cache/
 dataset/*.zip
 dataset/*.tar
+dataset/artifacts/*
+!dataset/artifacts/.gitkeep
 *.zip
 *.tar
+model/
+models/*
+!models/.gitkeep
+!models/artifacts/
+models/artifacts/*
+!models/artifacts/.gitkeep
+model-deploy/artifacts/*
+!model-deploy/artifacts/.gitkeep
 training/runs/
+training/weights/
 runs/
-models/
 *.pt
 *.onnx
 *.om

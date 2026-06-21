@@ -79,6 +79,7 @@ Atlas 上传检测结果
 ```text
 GET  /api/health
 GET  /api/system/status
+GET  /api/camera/stream.mjpg
 POST /api/inspection/start
 POST /api/inspections/:id/finish
 POST /api/inspections/:id/fail

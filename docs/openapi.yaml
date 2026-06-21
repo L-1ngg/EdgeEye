@@ -40,6 +40,21 @@ paths:
                         $ref: "#/components/schemas/SystemOverview"
         "400":
           $ref: "#/components/responses/Error"
+  /api/camera/stream.mjpg:
+    get:
+      operationId: streamCamera
+      summary: Camera MJPEG stream
+      description: Realtime display stream. Detection results and evidence metadata remain on latest-result and detection upload APIs.
+      responses:
+        "200":
+          description: MJPEG multipart stream
+          content:
+            multipart/x-mixed-replace:
+              schema:
+                type: string
+                format: binary
+        "503":
+          $ref: "#/components/responses/Error"
   /api/inspection/start:
     post:
       operationId: startInspection

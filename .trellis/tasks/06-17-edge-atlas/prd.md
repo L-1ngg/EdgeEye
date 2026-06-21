@@ -31,7 +31,31 @@
 - `/dev/video0` 是 Video Capture 节点，`/dev/video1` 是 Metadata Capture 节点；`/dev/video0` 支持 MJPG 和 YUYV，已确认的测试配置是 MJPG `640x480 @ 30 FPS`，并支持 `800x600`、`1280x720`、`1280x960` 等分辨率。
 - 已保存测试截图和视频到任务目录：`camera-usb-video0-640x480.jpg`、`camera-usb-video0-640x480-warmup.jpg`、`camera-usb-video0-640x480-3s.mjpeg`。
 - OpenCV 读取 `/dev/video0` 成功，返回 `opened=True`、`ok=True`，图像尺寸为 `(480, 640, 3)`；但当前截图内容几乎全黑，说明链路可读帧，但画面需要重新对准或补光后再做演示级复测。
+- 2026-06-18 仓库更新后重新验证 USB 摄像头：`v4l2-ctl --list-devices` 仍能识别 `PC Camera: PC Camera`，`/dev/video0` 仍是 Video Capture 节点，当前格式为 MJPG `640x480 @ 30 FPS`。
+- 2026-06-18 使用 `v4l2-ctl --device=/dev/video0 --stream-mmap --stream-count=1 --stream-to=/tmp/edgeeye-video0-frame.mjpg` 直接抓帧成功，已保存证据图片 `camera-usb-video0-2026-06-18-v4l2.jpg`；该帧是 `640x480` JPEG，OpenCV `imread` 可解码为 `(480, 640, 3)`，平均亮度约 `1.83`，画面仍接近全黑。
+- 2026-06-18 当前系统 Python/OpenCV 通过 `cv2.VideoCapture('/dev/video0', cv2.CAP_V4L2)` 打开设备失败，返回 `opened_before_read=False`；这与 V4L2 直接抓帧成功不同，后续边缘端代码应优先把“V4L2 可读、OpenCV 需兼容处理”作为摄像头输入层风险处理。
+- 仓库当前没有 `edge-app/` 边缘端业务实现目录；本阶段不修改模型资产、模型 runner 或推理逻辑，只确认摄像头链路和前后端接口入口。
+- 后端已提供边缘端上传接口：`POST /api/detection/results`，路由位于 `backend/app/api/routes/inspections.py`，请求模型为 `DetectionUploadRequest`，响应模型为 `DetectionUploadResult`。
+- `DetectionUploadRequest` 当前要求 JSON 上传，必须包含 `idempotencyKey`、`inspectionId`、`frameId`、`timestamp`、`isKeyFrame`、`uploadReason`、`imageUrl`、`imageWidth`、`imageHeight`、`detections` 和 `performance`；`annotatedImageUrl`、`frameSeq`、`deviceId`、`eventKey`、`sampleWindow` 可按场景提供。
+- 后端会校验检测框必须满足 `0 <= x1 < x2 <= imageWidth` 和 `0 <= y1 < y2 <= imageHeight`；`Performance.npuUsage` 允许为 `null`，便于开发板指标不可用时降级上传。
+- 后端会按 `idempotencyKey` 做幂等：相同内容重复上传返回 `duplicate=true`，同键不同内容返回 `IDEMPOTENCY_CONFLICT`。
+- 前端实时页当前不直接连摄像头，而是通过 `web/src/api/client.ts` 先取 `/api/inspections?pageSize=1` 的最新巡检，再请求 `GET /api/inspections/{inspectionId}/latest-result`；`web/src/pages/RealtimePage.tsx` 使用 `annotatedImageUrl ?? imageUrl` 展示画面并按原图尺寸绘制检测框。
+- 2026-06-18 后端接口测试已通过：在 `backend/` 下执行 `env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest`，结果 `11 passed, 1 warning`，覆盖检测上传、latest-result、幂等冲突、bbox 越界和缺失 NPU 指标。
 - 仓库当前未发现 `edge-app/`、`camera/`、`model-deploy/`、`config/`、`logs/` 目录，也未发现 `.om`、`.onnx`、`.pt`、`classes.json`、`label.names` 或演示视频/图片资产；在系统常见目录中也未找到可直接使用的项目级 `.om` 模型文件。
+- 2026-06-18 已将无模型摄像头桥并入后端进程：后端启动时默认尝试用 ffmpeg 从 `/dev/video0` 抓取 `640x480` JPEG，保存到 `uploads/raw/{inspectionId}/{frameId}.jpg`，并通过后端服务层写入空 `detections` 的 `periodic_sample` 结果；不再需要单独启动 edge 脚本。
+- 当前后端不包含视觉检测模型，也不是模型推理服务；它提供 inspection lifecycle、detection upload、latest-result、fault/alarm/advice/report 等 API。视觉模型仍应在边缘端接入，后续只填充现有上传 payload 的 `detections` 字段，不应改接口参数。
+- 2026-06-18 后端内置桥保留与独立脚本相同的存储和 latest-result 契约；前端仍通过现有 `/api/inspections/{inspectionId}/latest-result` 展示最新帧。
+- 2026-06-18 前端已按现有 API 增加实时快照轮询：登录后每 1 秒刷新一次 `/api/inspections/{inspectionId}/latest-result` 链路，不新增接口参数或启动步骤。
+- 2026-06-19 为解决 1 FPS 抓拍轮询卡顿和 raw 文件持续增长，实时显示改为后端内置 `GET /api/camera/stream.mjpg` MJPEG 长连接；latest-result 继续负责检测框、性能、故障和报告证据数据。
+- 2026-06-19 后端摄像头桥默认使用单个 ffmpeg MJPEG 长进程作为摄像头拥有者；实时流不落盘，后台仅按 `EDGEEYE_CAMERA_INTERVAL_SECONDS` 保存低频 raw 样本，并按 `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` 清理旧样本。
+- 2026-06-21 已整理模型与数据集 artifacts 目录：当前本地 ONNX 位于 `models/artifacts/detector-transformer-v1.onnx`，数据集 zip 位于 `dataset/artifacts/transformer-roboflow-v2-yolov8.zip`，两者均被 Git 忽略。
+- 2026-06-21 已新增 ONNX 调试桥 `model-deploy/edge_onnx_bridge.py`，配套 `classes-v1.json`、`label.names` 和 `preprocess-v1.json`；该桥可从图片运行当前 ONNX，做 YOLO detect 后处理，并生成符合 `DetectionUploadRequest` 的 payload。
+- 当前模型是单类 `transformer` detect 模型，只能映射为 `deviceType: "transformer"`、`faultType: null`；可用于设备检测展示链路，不会触发故障、告警或维修建议。
+- 当前 ONNX 调试桥已用本地样例图片跑通，并用后端 `DetectionUploadRequest` Pydantic 模型校验通过；尚未替代正式 Atlas `ONNX -> OM -> ACL` 路线。
+- 2026-06-22 成员2确认当前测试版模型信息：YOLOv8 `detect`，只有 1 类 `0: transformer`，输入尺寸 `640x640`，推荐阈值 `conf=0.25`、`iou=0.45`；该模型只训练 3 轮，只用于跑通链路，不评估识别准确率。
+- 2026-06-22 已将用户临时放在根目录 `images/` 的 5 张测试图迁移到本地 ignored artifact 目录 `model-deploy/artifacts/transformer-v1-test-images/raw/`，并重命名为 `transformer-v1-001.jpg` 到 `transformer-v1-005.jpg`。
+- 2026-06-22 已基于 5 张测试图生成本地 ONNX smoke 输出：`model-deploy/artifacts/transformer-v1-test-images/payloads/` 和 `annotated/`；所有 payload 均通过后端 `DetectionUploadRequest` 校验。
+- 2026-06-22 已新增 `model-deploy/expected-output-v1.json`，记录 5 张图的 ONNX 基准输出，用于后续 ATC 转 OM 和 Atlas ACL 推理结果对比。
 
 ## Requirements
 
@@ -39,6 +63,10 @@
 
 - 提供边缘端运行目录和配置方案，覆盖后端地址、摄像头源、模型路径、类别文件、阈值、上传间隔、本地队列大小和图片输出目录。
 - 支持摄像头或视频文件作为输入源；真实摄像头不可用时，允许先用视频文件完成最小联调。
+- 当前小阶段只做摄像头硬件烟测和前后端接口确认，不改动模型资产、模型推理接口或后处理逻辑。
+- 在模型资产未交付前，由后端进程内置无模型摄像头实时桥：上传空 `detections`，让前端可以先看到真实 USB 摄像头画面，且用户只需要启动后端和前端。
+- 实时画面必须优先走后端 MJPEG 流，不再依赖每秒保存 JPEG 后让前端轮询图片。
+- 无模型阶段不得连续写 MP4 或保存每个视频帧；只保留 latest-result/证据所需的低频样本，并设置保留上限。
 - 支持单帧采集和连续读取，并记录摄像头断开、读帧失败和重连状态。
 - 支持加载成员2交付的 ONNX/OM 模型资产，保留 `best.pt -> ONNX -> ATC -> OM -> ACL` 的转换记录。
 - 板端推理预处理必须与工程规范一致：BGR 转 RGB、resize 到模型输入尺寸、归一化到 `[0, 1]`、HWC 转 CHW、增加 batch 维度、输入 `NCHW`。
@@ -81,10 +109,22 @@
 - [x] 开发板基础环境信息被记录：板端标识、系统版本、CANN toolkit 版本、Python 版本、OpenCV 状态。
 - [ ] 开发板设备节点状态被进一步确认：NPU 设备节点已可用，模型资产位置仍待确认。
 - [x] 可从摄像头或视频源读取画面，至少能保存一张原始测试图片。
+- [x] 当前 USB 摄像头可通过 V4L2 直接抓取 `640x480` JPEG 测试帧，证据图片已保存到任务目录。
+- [x] 已确认后端存在边缘端上传入口 `POST /api/detection/results`，前端实时页通过 latest-result 间接展示边缘端结果。
+- [x] 已验证后端接口测试通过，检测上传、幂等、latest-result、bbox 校验和 `npuUsage: null` 行为可用。
+- [x] 本阶段未修改模型资产、模型 runner、推理后处理或模型接口。
+- [x] 已新增后端内置无模型实时摄像头桥，按现有数据契约写入空检测结果，前端可通过 latest-result 展示真实摄像头帧。
+- [x] 前端实时巡检页会自动刷新 latest-result 快照，用户只需启动后端和前端即可观察摄像头画面变化。
+- [x] OpenCV 当前无法直接打开 `/dev/video0` 的问题已通过 ffmpeg/V4L2 可替换 capture backend 绕开；默认配置使用 ffmpeg。
+- [x] 已新增后端 MJPEG 实时流 `GET /api/camera/stream.mjpg`，前端实时页优先使用该流显示画面。
+- [x] 实时显示不按视频帧落盘；无模型 raw 样本改为低频保存并限制每次巡检保留数量。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
-- [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
+- [x] 已提供本地 ONNX 调试路径 `model-deploy/edge_onnx_bridge.py`，真实 OM/ACL 暂不可用时可先用开发机 ONNX 打通检测 payload 链路。
+- [x] 当前 ONNX 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过后端请求模型边界校验。
+- [x] 成员2当前测试版模型元数据已记录：单类 `transformer`、YOLOv8 detect、输入 `640x640`、`conf=0.25`、`iou=0.45`。
+- [x] 5 张本地测试图已整理到 ignored artifact 目录并生成 ONNX smoke payload、标注图和 `expected-output-v1.json` 基准。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
-- [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功。
+- [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前 ONNX 调试桥已实现可选 POST，但尚未在运行中的后端服务上做端到端上传复测。
 - [ ] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
 - [ ] 能显示或记录 latency、FPS、CPU、内存和 NPU 使用率。
 - [ ] 摄像头断开、模型加载失败、ACL 错误和上传失败都有明确日志。
@@ -101,9 +141,11 @@
 
 ## Open Questions
 
-- 模型资产位置尚未由用户确认，且系统常见目录里未发现可直接使用的项目级 `.om` 模型文件。
+- 当前 ONNX 测试模型和阈值已确认；仍未发现可直接使用的项目级 `.om` 模型文件，ATC 转换和 Atlas ACL 推理尚未执行。
 - 后端联调地址是否已可从开发板访问尚未确认。
-- 成员2是否已经交付可转换或可直接运行的 ONNX/OM 模型尚未确认。
+- 成员2后续多类别大模型尚未交付，当前只能按单类 `transformer` 设备检测链路联调。
+- 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
+- ATC/OM/ACL 路线暂不执行；下一阶段可继续完善上传、后端可访问图片路径和后端端到端复测。
 
 ## Notes
 

@@ -63,13 +63,15 @@ annotated/inspection-20260616-0001/frame-000001.jpg
 ### 模型文件
 
 ```text
-models/detector-v1.onnx
-models/detector-v1.om
-models/detector-v1.pt
-models/label.names
-models/classes-v1.json
-models/preprocess-v1.json
+models/artifacts/detector-v1.onnx
+models/artifacts/detector-v1.om
+models/artifacts/detector-v1.pt
+model-deploy/label.names
+model-deploy/classes-v1.json
+model-deploy/preprocess-v1.json
 ```
+
+大模型、数据集压缩包、训练权重和板端 `.om` 属于本地 artifacts，默认不进入 Git。仓库只提交目录占位、推理/转换脚本、类别映射、预处理配置和说明文档。
 
 ### 规则文件
 
@@ -277,12 +279,37 @@ Atlas 部署记录里必须保留：
     "mean": [0, 0, 0],
     "std": [255, 255, 255]
   },
-  "confidenceThreshold": 0.5,
+  "confidenceThreshold": 0.25,
   "nmsThreshold": 0.45
 }
 ```
 
 模型交付还必须提供一份 `expected-output-v1.json`，至少包含 5 张测试图的期望 `category`、`bbox`、`confidence` 范围和类别映射结果，用于成员1在 Atlas 转换后做一致性验证。
+
+### 当前 ONNX 调试桥
+
+`model-deploy/edge_onnx_bridge.py` 是开发机和早期联调用的 ONNX 调试桥，职责是验证模型调用链路和后端 payload 形状：
+
+```bash
+python3 model-deploy/edge_onnx_bridge.py --image /path/to/image.jpg
+```
+
+后端启动后可以直接提交检测结果：
+
+```bash
+python3 model-deploy/edge_onnx_bridge.py \
+  --image /path/to/image.jpg \
+  --api-base http://localhost:8000/api \
+  --start-inspection
+```
+
+约束：
+
+- 脚本只上传 JSON payload，不上传图片文件本身；
+- 输出 bbox 必须转换为原图像素坐标 `[x1, y1, x2, y2]`；
+- 类别映射必须来自 `model-deploy/classes-v1.json`，不得靠字符串猜测；
+- 模型没有检测结果时上传 `detections: []` 仍是合法状态；
+- 当前 ONNX 调试桥不是最终 Atlas 推理实现，正式部署仍需 `ONNX -> OM -> ACL` 验证。
 
 ## 边缘端上传策略
 

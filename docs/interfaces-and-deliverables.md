@@ -109,7 +109,7 @@ EdgeEye 只借鉴这些流程和工程边界，不直接继承对方的后端数
 | 前端页面 | 必要接口 | 页面职责 |
 | --- | --- | --- |
 | Dashboard | `GET /api/dashboard`、`GET /api/system/status` | 展示统计、摄像头状态、Atlas 状态、模型状态和后端状态 |
-| 实时巡检 | `GET /api/inspections/:id/latest-result` | 展示图片、检测框、设备识别、实时故障和性能数据 |
+| 实时巡检 | `GET /api/camera/stream.mjpg` + `GET /api/inspections/:id/latest-result` | MJPEG 展示实时画面；latest-result 展示检测框、设备识别、实时故障和性能数据 |
 | 故障中心 | `GET /api/events`、`GET /api/faults`、`GET /api/alarms`、`POST /api/advice/generate`、`GET /api/faults/:id/advice` | 展示聚合事件、故障、告警、处理状态和大模型维修建议 |
 | 报告中心 | `GET /api/reports`、`GET /api/reports/:id`、`GET /api/reports/:id/export` | 展示巡检报告并提供导出入口 |
 

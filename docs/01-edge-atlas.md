@@ -60,6 +60,66 @@
 
 当前镜像中未发现可直接用于本项目的 `.om` 目标检测模型文件。成员2仍需提供 ONNX/OM 模型、`classes.json`、`label.names`、输入尺寸和阈值参数。
 
+## 当前模型接入壳子
+
+2026-06-21 已补充一条开发机/临时联调用的 ONNX 接入壳子，用于在最终 Atlas OM/ACL 推理完成前打通“模型输出 → EdgeEye Detection → 后端上传”链路。
+
+2026-06-22 成员2补充当前测试版模型信息：模型类型为 YOLOv8 `detect`，当前只有 1 类 `0: transformer`，输入尺寸为 `640x640`，推荐阈值为 `conf=0.25`、`iou=0.45`。该模型仅训练 3 轮，本阶段只用于跑通转换前的 ONNX 调试链路和后续 Atlas 转换/推理代码，不以识别准确率作为验收条件。
+
+当前本地模型资产：
+
+| 文件 | 用途 |
+| --- | --- |
+| `models/artifacts/detector-transformer-v1.onnx` | 当前一类 `transformer` YOLO detect ONNX 模型，本地大文件被 `.gitignore` 忽略 |
+| `model-deploy/edge_onnx_bridge.py` | 开发机 ONNX 推理与后端 payload 生成脚本 |
+| `model-deploy/classes-v1.json` | `class_id` 到 `category`、`deviceType`、`faultType` 的映射 |
+| `model-deploy/label.names` | 类别顺序文件，当前只有 `transformer` |
+| `model-deploy/preprocess-v1.json` | 输入尺寸、颜色通道、归一化、置信度阈值和 NMS 阈值 |
+| `model-deploy/expected-output-v1.json` | 5 张本地测试图的 ONNX smoke 基准，用于后续 OM/ACL 输出对比 |
+| `model-deploy/artifacts/transformer-v1-test-images/` | 本地 5 张测试图、标注图和 payload 输出，Git 忽略 |
+
+当前模型只输出一类：
+
+```json
+{
+  "category": "transformer",
+  "deviceType": "transformer",
+  "faultType": null
+}
+```
+
+因此它只能先用于设备检测框展示，不会触发后端故障、告警或维修建议。若后续要产生故障事件，成员2需要交付可映射到 `faultType` 的类别，例如 `surface_damage`、`rust`、`foreign_object`、`smoke` 或 `fire`。
+
+本地单图验证命令：
+
+```bash
+python3 model-deploy/edge_onnx_bridge.py \
+  --image model-deploy/artifacts/transformer-v1-test-images/raw/transformer-v1-001.jpg \
+  --frame-id frame-001 \
+  --inspection-id inspection-transformer-v1-smoke \
+  --annotated-output model-deploy/artifacts/transformer-v1-test-images/annotated/transformer-v1-001.jpg \
+  --payload-output model-deploy/artifacts/transformer-v1-test-images/payloads/transformer-v1-001.json
+```
+
+后端已启动时可直接上传检测结果：
+
+```bash
+python3 model-deploy/edge_onnx_bridge.py \
+  --image /path/to/image.jpg \
+  --api-base http://localhost:8000/api \
+  --start-inspection
+```
+
+注意：该脚本当前只上传 JSON 检测结果，不负责把图片文件上传到后端。真实联调时，`imageUrl` 和 `annotatedImageUrl` 必须指向后端可访问的 `/uploads/...` 路径。
+
+正式板端路线仍然是：
+
+```text
+ONNX -> atc 转 OM -> Atlas ACL 加载 OM -> 同样生成 EdgeEye Detection payload
+```
+
+`edge_onnx_bridge.py` 的价值是固定预处理、后处理、类别映射和上传 payload 形状；后续更换模型时优先替换模型文件、`label.names`、`classes-v1.json` 和阈值配置，不重写后端上传契约。
+
 ### 摄像头
 
 | 项目 | 当前值 |

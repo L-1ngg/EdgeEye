@@ -19,6 +19,7 @@ Pydantic models, settings, persistence, report generation, or tests.
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | Active |
 | [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Active |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Active |
+| [Detection Upload Adapters](./detection-upload-adapters.md) | Edge/model adapter payload contract and ONNX debug bridge rules | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
 | [Logging Guidelines](./logging-guidelines.md) | Logging and sensitive-data boundaries | Active |
 
@@ -39,5 +40,6 @@ Pydantic models, settings, persistence, report generation, or tests.
 - Read `directory-structure.md` before adding backend modules.
 - Read `database-guidelines.md`, `error-handling.md`, and `quality-guidelines.md` before adding or changing endpoints.
 - Read `logging-guidelines.md` before adding operational diagnostics, provider calls, or exception handling.
+- Read `detection-upload-adapters.md` before changing edge/model adapter output or the detection upload payload.
 - Keep API response fields aligned with `docs/contracts.md` and `docs/openapi.yaml`.
 - Run `cd backend && uv run pytest` before committing backend behavior changes.

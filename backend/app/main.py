@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -7,6 +9,16 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
+from app.services.camera_bridge import camera_bridge_service
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    camera_bridge_service.start()
+    try:
+        yield
+    finally:
+        camera_bridge_service.stop()
 
 
 def create_app() -> FastAPI:
@@ -19,6 +31,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description="EdgeEye backend API skeleton",
+        lifespan=lifespan,
     )
     app.add_middleware(
         CORSMiddleware,

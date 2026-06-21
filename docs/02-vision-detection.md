@@ -108,6 +108,38 @@
 - `modelVersion`、`classesVersion` 和推荐阈值版本；
 - 用于 Atlas 转换验证的 `expected-output-v1.json`。
 
+## 当前模型交付状态
+
+2026-06-21 当前仓库已有一版临时模型与接入配置：
+
+| 文件 | 当前状态 |
+| --- | --- |
+| `models/artifacts/detector-transformer-v1.onnx` | 已放在本地 artifacts 目录，Git 忽略，不进入仓库 |
+| `dataset/artifacts/transformer-roboflow-v2-yolov8.zip` | 已放在本地 dataset artifacts 目录，Git 忽略，不进入仓库 |
+| `model-deploy/classes-v1.json` | 当前只映射 `class_id=0` 到 `transformer` |
+| `model-deploy/label.names` | 当前只有一行 `transformer` |
+| `model-deploy/preprocess-v1.json` | 当前记录 `640x640`、RGB、归一化、`conf=0.25`、`iou=0.45` |
+| `model-deploy/expected-output-v1.json` | 当前 5 张本地测试图的 ONNX smoke 基准，用于后续 Atlas OM/ACL 输出对比 |
+| `model-deploy/artifacts/transformer-v1-test-images/` | 当前 5 张本地测试图、标注图和 payload 输出，Git 忽略，不进入仓库 |
+
+已确认的限制：
+
+- 当前模型是 `detect` 检测模型，不是最终 Atlas OM 模型；
+- 当前只有 `transformer` 一类，只能做变压器设备检测；
+- 当前模型只训练 3 轮，本阶段只验联调链路，不验识别准确率；
+- 当前输出 `faultType: null`，不能触发故障、告警或维修建议；
+- 当前数据集里存在 bbox 与 polygon 标注混合的迹象，训练方需要确认导出/训练口径；
+- 当前 ONNX 可用于开发机联调，但正式开发板仍需转换为 `.om` 并在 Atlas ACL 路线验证。
+
+训练成员下一版至少需要补充：
+
+- `best.onnx` 或更明确版本名的 ONNX 模型；
+- `data.yaml` 或 `label.names`，保证类别顺序和 class id 明确；
+- 模型类型：`detect` 或 `segment`；
+- 输入尺寸、预处理方式和后处理阈值；
+- 至少 5 张测试图片和每张图的期望检测结果；
+- 如果要支持故障告警，类别必须能映射到 `faultType` 枚举。
+
 ## 任务清单
 
 ### 类别与标注规范
