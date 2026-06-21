@@ -1,6 +1,6 @@
 # Model Training Handoff Contract
 
-## Scenario: Detector-v1 Training, Export, and Handoff
+## Scenario: Detector-v1 Training, Export, and Insulator-v1 Candidate Handoff
 
 ### 1. Scope / Trigger
 
@@ -10,12 +10,20 @@ This spec applies when changing:
 - `training/export_onnx.py`
 - `training/generate_expected_output.py`
 - `models/edgeeye-detector-v1/` handoff package shape
+- `models/edgeeye-insulator-v1-*` candidate package shape
 - detector-v1 baseline training or export documentation
 
-The output is a local ignored handoff package:
+The detector-v1 output is a local ignored handoff package:
 
 ```text
 models/edgeeye-detector-v1/
+```
+
+The insulator-v1 optimization candidate uses a separate ignored package until
+it is explicitly promoted:
+
+```text
+models/edgeeye-insulator-v1-opt30-yolov8s-adamw/
 ```
 
 Do not commit model weights, ONNX files, generated expected-output files,
@@ -108,8 +116,12 @@ The handoff package must contain:
 ONNX contract:
 
 - Input: `images`, shape `[1, 3, 640, 640]`
-- Output: `output0`, shape `[1, 8, 8400]`
+- Detector-v1 output: `output0`, shape `[1, 8, 8400]`
+- Insulator-v1 two-class candidate output: `output0`, shape `[1, 6, 8400]`
 - Opset: 11
+
+For YOLOv8 detection exports, the second output dimension is `4 + class_count`.
+Do not reuse the four-class parser shape for a two-class candidate.
 
 Expected-output case contract:
 
@@ -130,6 +142,7 @@ Expected-output case contract:
 | Fewer than 5 images have detections | `generate_expected_output.py` exits non-zero; increase candidates or lower confidence |
 | ONNX export has wrong opset or shape | Treat as failed export; do not hand off to Atlas |
 | Ultralytics writes default root `runs/` output | Keep it ignored; do not commit generated validation plots |
+| Insulator-v1 candidate overwrites `models/edgeeye-detector-v1/` | Treat as invalid promotion; restore separation and document the contract change |
 
 ### 5. Good/Base/Bad Cases
 
@@ -166,6 +179,16 @@ After a full baseline run:
 
 - Record key metrics and known risks in a tracked report under `dataset/docs/`.
 - Record SHA-256 hashes for handoff package files in the report.
+
+After an insulator-v1 candidate run:
+
+- Validate the candidate dataset with explicit `--dataset`, `--classes`, and
+  `--labels` paths under `dataset/processed/edgeeye-insulator-v1/`.
+- Export ONNX with opset 11 and verify `[1,3,640,640] -> [1,6,8400]`.
+- Generate expected outputs with explicit candidate dataset metadata paths.
+- Report metrics as a two-class, duplicate-safe split result and state that
+  they are not directly equivalent to the previous four-class detector-v1
+  baseline.
 
 ### 7. Wrong vs Correct
 

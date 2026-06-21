@@ -1,6 +1,6 @@
 # Dataset Preparation Contract
 
-## Scenario: Detector-v1 Source Conversion
+## Scenario: Detector-v1 Source Conversion And Insulator-v1 Candidate Conversion
 
 ### 1. Scope / Trigger
 
@@ -8,13 +8,20 @@ This spec applies when changing:
 
 - `training/prepare_dataset.py`
 - detector-v1 class mappings
+- insulator-v1 candidate class mappings
 - raw source inclusion or exclusion rules
 - generated dataset metadata and reports
 
-The conversion output is:
+The default detector-v1 conversion output is:
 
 ```text
 dataset/processed/edgeeye-detector-v1/
+```
+
+The insulator-focused optimization candidate output is:
+
+```text
+dataset/processed/edgeeye-insulator-v1/
 ```
 
 Do not treat this output as source-controlled application code. It is generated
@@ -46,6 +53,17 @@ uv run python validate_dataset.py \
   --labels ../dataset/processed/edgeeye-detector-v1/label.names
 ```
 
+Insulator-v1 candidate command:
+
+```bash
+cd training
+uv run python prepare_dataset.py --variant edgeeye-insulator-v1 --overwrite
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-insulator-v1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-insulator-v1/classes.json \
+  --labels ../dataset/processed/edgeeye-insulator-v1/label.names
+```
+
 Converter signature pattern:
 
 ```python
@@ -70,6 +88,34 @@ The same order must appear in:
 - `training/config/label.names`
 - generated `dataset.yaml`
 - generated YOLO label class IDs
+
+Insulator-v1 candidate class order is fixed:
+
+| ID | Class |
+| ---: | --- |
+| 0 | `insulator_normal` |
+| 1 | `insulator_surface_damage` |
+
+Insulator-v1 candidate conversion rules:
+
+- Keep it as a separate variant; do not silently overwrite
+  `edgeeye-detector-v1`.
+- Include Aerial and DatasetNinja Supervisely insulator data.
+- Include substation `6` / `Glass disc insulator` and `7` /
+  `Porcelain pin insulator` only as `insulator_normal`.
+- Exclude transformer source data and all non-insulator substation classes.
+- Build duplicate groups before train/val/test assignment using image SHA-256
+  and Supervisely filename keys.
+- Keep all duplicate group members in one split by selecting one canonical
+  sample before splitting. Prefer damage-positive samples, then samples with
+  more boxes, then Aerial over DatasetNinja over substation when choosing the
+  canonical sample.
+- Split unique samples by image-level damage presence into deterministic
+  80/10/10 train/val/test partitions.
+- Apply normal-only downsampling and damage-positive repetition only to train.
+- Keep validation and test real, duplicate-safe, and unresampled.
+- Record duplicate counts, raw duplicate-safe split counts, and train sampling
+  policy in `manifest.json` and the tracked dataset report.
 
 Source mappings:
 
@@ -110,6 +156,8 @@ Substation exclusions:
 | `--limit-per-source` is used for a smoke conversion | Limit generated samples only; keep scan-level skip and exclusion counters truthful for the scanned source |
 | Final conversion has zero images or zero boxes | Exit non-zero |
 | `dataset.yaml`, `classes.json`, and `label.names` disagree | `validate_dataset.py` must fail |
+| Insulator-v1 val/test are resampled | Treat as invalid candidate data; regenerate with resampling limited to train |
+| Duplicate sample keys cross train/val/test for insulator-v1 | Treat as invalid candidate data; fix grouping before training |
 
 ### 5. Good/Base/Bad Cases
 
@@ -130,6 +178,9 @@ Base:
   small deterministic sample, but still scans the substation labels so
   `skippedImages` and `excludedClasses` describe source quality rather than only
   the generated subset.
+- Running `prepare_dataset.py --variant edgeeye-insulator-v1 --overwrite`
+  creates a separate two-class dataset and leaves the four-class processed
+  detector-v1 dataset untouched.
 
 Bad:
 
@@ -146,11 +197,16 @@ Required checks after source mapping changes:
 - smoke conversion with `--limit-per-source`
 - full conversion with `--overwrite`
 - full validation with explicit `--dataset`, `--classes`, and `--labels`
+- for insulator-v1 changes, run the same smoke/full/validation sequence with
+  `--variant edgeeye-insulator-v1`
 - review generated `manifest.json` for:
   - exactly four target classes
   - source keys for all included sources
   - expected split counts
   - skipped images and excluded classes documented in the dataset report
+- for insulator-v1, review `manifest.json` for exactly two target classes,
+  duplicate summary, raw duplicate-safe split counts, and train-only sampling
+  policy
 
 ### 7. Wrong vs Correct
 

@@ -383,7 +383,7 @@ HTTP 状态码建议：
 ```json
 {
   "detectionId": "detection-000001",
-  "category": "insulator_defect",
+  "category": "insulator_surface_damage",
   "deviceType": "insulator",
   "faultType": "surface_damage",
   "confidence": 0.91,
@@ -565,7 +565,7 @@ HTTP 状态码建议：
   "imageHeight": 720,
   "detections": [
     {
-      "category": "insulator_defect",
+      "category": "insulator_surface_damage",
       "deviceType": "insulator",
       "faultType": "surface_damage",
       "confidence": 0.91,

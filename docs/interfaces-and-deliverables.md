@@ -77,7 +77,7 @@ EdgeEye 只借鉴这些流程和工程边界，不直接继承对方的后端数
   "imageHeight": 720,
   "detections": [
     {
-      "category": "insulator_defect",
+      "category": "insulator_surface_damage",
       "deviceType": "insulator",
       "faultType": "surface_damage",
       "confidence": 0.91,

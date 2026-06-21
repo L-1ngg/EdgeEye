@@ -153,6 +153,10 @@ VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 `transformer_surface_damage`。大型原始归档和生成后的 processed 数据不进
 git，只提交脚本、配置和轻量文档。
 
+当前优化候选模型单独记录为 `edgeeye-insulator-v1`，只包含两个绝缘子类别，
+ONNX 输出为 `output0 [1,6,8400]`。它不是四类 `edgeeye-detector-v1`
+基线的直接替换；是否晋升为交付模型需要单独确认。
+
 在 `training/` 目录准备并校验本地数据集：
 
 ```bash
@@ -166,7 +170,9 @@ uv run python validate_dataset.py \
 
 数据源映射、类别分布和剩余训练风险见
 [training/README.md](training/README.md)、[dataset/README.md](dataset/README.md)
-和 [dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)。
+、[dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)
+和
+[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)。
 
 ## 配置
 

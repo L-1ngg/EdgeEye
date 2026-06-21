@@ -8,7 +8,7 @@
 - Source page: <https://figshare.com/articles/dataset/A_YOLO_Annotated_15-class_Ground_Truth_Dataset_for_Substation_Equipment/24060960>
 - Local target: `dataset/raw/substation-equipment-15class/`
 - Status: downloaded, extracted, and placed.
-- Local archive: `dataset/24060960.zip`.
+- Local archive: `dataset/downloads/24060960.zip`.
 - Local extracted path: `dataset/raw/substation-equipment-15class/`.
 - Attempted on 2026-06-18: Figshare API and `ndownloader` endpoints returned HTTP 403 from this runtime.
 - Verified on 2026-06-19:
@@ -32,7 +32,7 @@
 - Roboflow page: <https://universe.roboflow.com/insulator-defect-detection/insulator-defect-detection-veowd>
 - Local target: `dataset/raw/insulator-defect-detection/`
 - Status: downloaded, extracted, and placed from the DatasetNinja archive.
-- Local archive: `dataset/insulator-defect-detection-DatasetNinja.tar`.
+- Local archive: `dataset/downloads/insulator-defect-detection-DatasetNinja.tar`.
 - Local extracted path: `dataset/raw/insulator-defect-detection/`.
 - Attempted on 2026-06-18: Roboflow YOLO download endpoint returned HTTP 403 with a Cloudflare challenge.
 - Verified on 2026-06-19:
@@ -64,7 +64,7 @@
 - Source page: <https://universe.roboflow.com/mehran-uet-jamshtoro/transformer-station-detection>
 - Local target: `dataset/raw/transformer-station-detection/`
 - Status: downloaded, extracted, and placed.
-- Local archive: `dataset/Transformer Station Detection.v1i.yolov8.zip`.
+- Local archive: `dataset/downloads/Transformer Station Detection.v1i.yolov8.zip`.
 - Local extracted path: `dataset/raw/transformer-station-detection/`.
 - Attempted on 2026-06-18: Roboflow YOLO download endpoint returned HTTP 403 with a Cloudflare challenge.
 - Verified on 2026-06-19:

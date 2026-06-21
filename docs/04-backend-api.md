@@ -156,7 +156,7 @@ GET  /api/faults/:id/advice
   "imageHeight": 720,
   "detections": [
     {
-      "category": "insulator_defect",
+      "category": "insulator_surface_damage",
       "deviceType": "insulator",
       "faultType": "surface_damage",
       "confidence": 0.91,

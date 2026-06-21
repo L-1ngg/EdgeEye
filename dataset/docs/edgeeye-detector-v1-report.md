@@ -33,9 +33,9 @@ uv run python validate_dataset.py \
 | Item | Path | Format | Use |
 | --- | --- | --- | --- |
 | Aerial Power Infrastructure Detection Train Dataset | `dataset/raw/aerial-power-infrastructure-detection-train/` | Supervisely JSON + images | Included |
-| Insulator-Defect Detection DatasetNinja archive | `dataset/insulator-defect-detection-DatasetNinja.tar` | Supervisely-style JSON archive | Included |
-| Transformer Station Detection archive | `dataset/Transformer Station Detection.v1i.yolov8.zip` | YOLOv8 archive | Included |
-| Substation Equipment 15-class archive | `dataset/24060960.zip` and `dataset/raw/substation-equipment-15class/` | YOLOv8 nested archive | Included for selected normal classes |
+| Insulator-Defect Detection DatasetNinja archive | `dataset/downloads/insulator-defect-detection-DatasetNinja.tar` | Supervisely-style JSON archive | Included |
+| Transformer Station Detection archive | `dataset/downloads/Transformer Station Detection.v1i.yolov8.zip` | YOLOv8 archive | Included |
+| Substation Equipment 15-class archive | `dataset/downloads/24060960.zip` and `dataset/raw/substation-equipment-15class/` | YOLOv8 nested archive | Included for selected normal classes |
 
 ## Source Mapping
 
@@ -130,7 +130,7 @@ total class boxes: insulator_normal=135814, insulator_surface_damage=6727, trans
 - `insulator_normal` now dominates after adding `Glass disc insulator` and `Porcelain pin insulator` from the substation dataset. The first training run may need class balancing or sampling if fault recall drops.
 - Transformer data remains much smaller than insulator data. The first training run may need class balancing, oversampling, more transformer data, or lower expectations for `transformer_surface_damage`.
 - `transformer_surface_damage` has only 87 boxes total. Treat this class as weak until manual image review and first validation metrics confirm it is usable.
-- `dataset/24060960.zip` is large and contains nested archives. It is now extracted and partially merged, but only the confirmed normal-device classes are used.
+- `dataset/downloads/24060960.zip` is large and contains nested archives. It is now extracted and partially merged, but only the confirmed normal-device classes are used.
 - Source labels such as `pollution-flashover` are mapped into broad `surface_damage`. This is compatible with the detector-v1 contract but should be described in the model evaluation report.
 
 ## Non-goals

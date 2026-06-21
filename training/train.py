@@ -25,6 +25,24 @@ def main() -> int:
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--device", default=None, help="CUDA device id, cpu, or omitted for auto")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--patience", type=int, default=None)
+    parser.add_argument("--optimizer", default=None)
+    parser.add_argument("--lr0", type=float, default=None)
+    parser.add_argument("--lrf", type=float, default=None)
+    parser.add_argument("--cos-lr", action="store_true", help="Enable cosine learning-rate schedule")
+    parser.add_argument("--mosaic", type=float, default=None)
+    parser.add_argument("--close-mosaic", type=int, default=None)
+    parser.add_argument("--mixup", type=float, default=None)
+    parser.add_argument("--copy-paste", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--deterministic", action="store_true")
+    parser.add_argument("--freeze", type=int, default=None)
+    parser.add_argument(
+        "--cache",
+        choices=["ram", "disk"],
+        default=None,
+        help="Optional Ultralytics dataset cache mode",
+    )
     parser.add_argument(
         "--project",
         type=Path,
@@ -56,6 +74,26 @@ def main() -> int:
     }
     if args.device is not None:
         train_kwargs["device"] = args.device
+    optional_args = {
+        "patience": args.patience,
+        "optimizer": args.optimizer,
+        "lr0": args.lr0,
+        "lrf": args.lrf,
+        "mosaic": args.mosaic,
+        "close_mosaic": args.close_mosaic,
+        "mixup": args.mixup,
+        "copy_paste": args.copy_paste,
+        "seed": args.seed,
+        "freeze": args.freeze,
+        "cache": args.cache,
+    }
+    for key, value in optional_args.items():
+        if value is not None:
+            train_kwargs[key] = value
+    if args.cos_lr:
+        train_kwargs["cos_lr"] = True
+    if args.deterministic:
+        train_kwargs["deterministic"] = True
 
     result = model.train(**train_kwargs)
     best = Path(result.save_dir) / "weights" / "best.pt"

@@ -61,7 +61,7 @@
 | 训练类别 | 契约映射 |
 | --- | --- |
 | `insulator_normal` | `deviceType: "insulator"`，`faultType: null` |
-| `insulator_defect` | `deviceType: "insulator"`，`faultType: "surface_damage"` |
+| `insulator_surface_damage` | `deviceType: "insulator"`，`faultType: "surface_damage"` |
 | `foreign_object` | `faultType: "foreign_object"` |
 | `bird_nest` | 优先映射为 `faultType: "foreign_object"`，前端展示为鸟巢/异物 |
 
@@ -87,7 +87,7 @@
 
 ```json
 {
-  "category": "insulator_defect",
+  "category": "insulator_surface_damage",
   "deviceType": "insulator",
   "faultType": "surface_damage",
   "confidence": 0.91,
@@ -201,3 +201,16 @@ reports/
 - 成员1可以基于交付模型完成 Atlas 部署；
 - 评估报告说明主要误报和漏报场景。
 - Atlas 转换后同一测试图片的类别和检测框与开发机结果基本一致。
+
+## 当前模型产物状态
+
+当前仓库保留两条模型线：
+
+- `edgeeye-detector-v1`：四类基线，包含绝缘子正常/破损和变压器正常/破损。
+- `edgeeye-insulator-v1-opt30-yolov8s-adamw`：两类绝缘子优化候选，类别为
+  `insulator_normal` 和 `insulator_surface_damage`。
+
+两类候选模型导出的 YOLOv8 ONNX 输出为 `output0 [1,6,8400]`，不能直接套用
+四类基线的 `[1,8,8400]` 后处理形状。优化结果和数据划分见
+[`dataset/docs/edgeeye-insulator-v1-optimization-report.md`](../dataset/docs/edgeeye-insulator-v1-optimization-report.md)。
+该候选模型是否替换四类基线，需要在 Atlas 转换和端到端联调前单独确认。

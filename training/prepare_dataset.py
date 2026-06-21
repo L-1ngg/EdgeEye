@@ -22,6 +22,10 @@ CLASS_NAME_TO_ID = {
     "transformer_normal": 2,
     "transformer_surface_damage": 3,
 }
+INSULATOR_CLASS_NAME_TO_ID = {
+    "insulator_normal": 0,
+    "insulator_surface_damage": 1,
+}
 
 AERIAL_LABEL_MAP = {
     "insulator": "insulator_normal",
@@ -39,6 +43,11 @@ SUBSTATION_LABEL_MAP = {
     6: "insulator_normal",
     7: "insulator_normal",
     11: "transformer_normal",
+}
+
+SUBSTATION_INSULATOR_LABEL_MAP = {
+    6: "insulator_normal",
+    7: "insulator_normal",
 }
 
 SUBSTATION_SOURCE_CLASSES = {
@@ -117,6 +126,48 @@ class ConversionStats:
             self.excluded_classes[class_name] = self.excluded_classes.get(class_name, 0) + count
 
 
+@dataclass(frozen=True)
+class InsulatorSample:
+    source: str
+    source_split: str
+    source_id: str
+    image_name: str
+    image_suffix: str
+    labels: tuple[str, ...]
+    class_boxes: dict[str, int]
+    content_sha256: str
+    duplicate_keys: tuple[str, ...]
+    image_path: Path | None = None
+    image_bytes: bytes | None = None
+    image_archive: Path | None = None
+    image_member_name: str | None = None
+
+    @property
+    def has_damage(self) -> bool:
+        return self.class_boxes.get("insulator_surface_damage", 0) > 0
+
+
+@dataclass
+class InsulatorCollection:
+    samples: list[InsulatorSample] = field(default_factory=list)
+    skipped_boxes: int = 0
+    skipped_images: int = 0
+    excluded_classes: dict[str, int] = field(default_factory=dict)
+    scanned: dict[str, int] = field(default_factory=dict)
+
+    def add_sample(self, sample: InsulatorSample) -> None:
+        self.samples.append(sample)
+        key = f"{sample.source}:{sample.source_split}"
+        self.scanned[key] = self.scanned.get(key, 0) + 1
+
+    def merge(self, other: "InsulatorCollection") -> None:
+        self.samples.extend(other.samples)
+        self.skipped_boxes += other.skipped_boxes
+        self.skipped_images += other.skipped_images
+        merge_counts(self.excluded_classes, other.excluded_classes)
+        merge_counts(self.scanned, other.scanned)
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -126,6 +177,17 @@ def first_existing(paths: list[Path]) -> Path | None:
         if path.exists():
             return path
     return None
+
+
+def dataset_archive(name: str) -> Path | None:
+    root = repo_root()
+    return first_existing(
+        [
+            root / "dataset" / "downloads" / name,
+            root / "dataset" / name,
+            root / name,
+        ]
+    )
 
 
 def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -179,8 +241,12 @@ def normalized_box(points: list[list[float]], width: float, height: float) -> tu
     )
 
 
-def label_line(class_name: str, box: tuple[float, float, float, float]) -> str:
-    class_id = CLASS_NAME_TO_ID[class_name]
+def label_line(
+    class_name: str,
+    box: tuple[float, float, float, float],
+    class_name_to_id: dict[str, int] = CLASS_NAME_TO_ID,
+) -> str:
+    class_id = class_name_to_id[class_name]
     return f"{class_id} " + " ".join(f"{value:.6f}" for value in box)
 
 
@@ -208,14 +274,14 @@ def merge_counts(target: dict[str, int], source: dict[str, int]) -> None:
         target[key] = target.get(key, 0) + count
 
 
-def write_dataset_yaml(output: Path) -> None:
+def write_dataset_yaml(output: Path, class_name_to_id: dict[str, int] = CLASS_NAME_TO_ID) -> None:
     data = {
         "path": output.resolve().as_posix(),
         "train": "train/images",
         "val": "val/images",
         "test": "test/images",
-        "nc": len(CLASS_NAME_TO_ID),
-        "names": {index: name for name, index in CLASS_NAME_TO_ID.items()},
+        "nc": len(class_name_to_id),
+        "names": {index: name for name, index in class_name_to_id.items()},
     }
     (output / "dataset.yaml").write_text(
         yaml.safe_dump(data, sort_keys=False, allow_unicode=False),
@@ -227,6 +293,37 @@ def copy_metadata(output: Path) -> None:
     config_dir = repo_root() / "training" / "config"
     for name in ["classes.json", "label.names", "preprocess-v1.json"]:
         shutil.copy2(config_dir / name, output / name)
+
+
+def write_insulator_metadata(output: Path) -> None:
+    classes = {
+        "version": "edgeeye-insulator-v1",
+        "classes": [
+            {
+                "id": 0,
+                "name": "insulator_normal",
+                "type": "device",
+                "deviceType": "insulator",
+                "faultType": None,
+            },
+            {
+                "id": 1,
+                "name": "insulator_surface_damage",
+                "type": "fault",
+                "deviceType": "insulator",
+                "faultType": "surface_damage",
+            },
+        ],
+    }
+    (output / "classes.json").write_text(
+        json.dumps(classes, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (output / "label.names").write_text(
+        "\n".join(name for name, _ in sorted(INSULATOR_CLASS_NAME_TO_ID.items(), key=lambda item: item[1])) + "\n",
+        encoding="utf-8",
+    )
+    shutil.copy2(repo_root() / "training" / "config" / "preprocess-v1.json", output / "preprocess-v1.json")
 
 
 def limited(items: Iterable[Path], limit: int | None) -> list[Path]:
@@ -355,12 +452,7 @@ def tar_member_text(tar: tarfile.TarFile, name: str) -> str:
 
 
 def convert_dataset_ninja_tar(output: Path, limit_per_source: int | None) -> ConversionStats:
-    archive = first_existing(
-        [
-            repo_root() / "dataset" / "insulator-defect-detection-DatasetNinja.tar",
-            repo_root() / "insulator-defect-detection-DatasetNinja.tar",
-        ]
-    )
+    archive = dataset_archive("insulator-defect-detection-DatasetNinja.tar")
     stats = ConversionStats()
     if archive is None:
         return stats
@@ -429,12 +521,7 @@ def convert_dataset_ninja_tar(output: Path, limit_per_source: int | None) -> Con
 
 
 def convert_transformer_zip(output: Path, limit_per_source: int | None) -> ConversionStats:
-    archive = first_existing(
-        [
-            repo_root() / "dataset" / "Transformer Station Detection.v1i.yolov8.zip",
-            repo_root() / "Transformer Station Detection.v1i.yolov8.zip",
-        ]
-    )
+    archive = dataset_archive("Transformer Station Detection.v1i.yolov8.zip")
     stats = ConversionStats()
     if archive is None:
         return stats
@@ -592,16 +679,536 @@ def convert_substation_equipment(output: Path, limit_per_source: int | None) -> 
     return stats
 
 
+def safe_text(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_")
+
+
+def bytes_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def parse_supervisely_labels(
+    annotation: dict[str, object],
+    label_map: dict[str, str],
+) -> tuple[tuple[str, ...], int, dict[str, int], dict[str, int]]:
+    size = annotation["size"]
+    width = float(size["width"])  # type: ignore[index]
+    height = float(size["height"])  # type: ignore[index]
+    lines: list[str] = []
+    skipped = 0
+    class_boxes: dict[str, int] = {}
+    excluded_classes: dict[str, int] = {}
+
+    for obj in annotation.get("objects", []):  # type: ignore[union-attr]
+        source_class_name = obj.get("classTitle", "")  # type: ignore[union-attr]
+        class_name = label_map.get(source_class_name)
+        if class_name is None:
+            key = f"supervisely_source:{source_class_name}"
+            excluded_classes[key] = excluded_classes.get(key, 0) + 1
+            skipped += 1
+            continue
+        try:
+            box = normalized_box(obj["points"]["exterior"], width, height)  # type: ignore[index]
+        except (KeyError, TypeError, ValueError):
+            skipped += 1
+            continue
+        lines.append(label_line(class_name, box, INSULATOR_CLASS_NAME_TO_ID))
+        class_boxes[class_name] = class_boxes.get(class_name, 0) + 1
+
+    return tuple(lines), skipped, class_boxes, excluded_classes
+
+
+def supervisely_duplicate_keys(image_name: str, content_sha256: str) -> tuple[str, str]:
+    return (f"sha256:{content_sha256}", f"supervisely-filename:{image_name.lower()}")
+
+
+def collect_aerial_insulator_samples(limit_per_source: int | None) -> InsulatorCollection:
+    root = repo_root() / "dataset" / "raw" / "aerial-power-infrastructure-detection-train" / "project"
+    collection = InsulatorCollection()
+    if not root.exists():
+        return collection
+
+    for source_split in ["train", "val"]:
+        ann_dir = root / source_split / "ann"
+        img_dir = root / source_split / "img"
+        ann_files = limited(ann_dir.glob("*.json"), limit_per_source)
+        for ann_file in tqdm(ann_files, desc=f"aerial-insulator:{source_split}"):
+            image_name = ann_file.name.removesuffix(".json")
+            image_path = img_dir / image_name
+            if not image_path.exists():
+                collection.skipped_images += 1
+                continue
+            annotation = json.loads(ann_file.read_text(encoding="utf-8"))
+            labels, skipped, class_boxes, excluded_classes = parse_supervisely_labels(
+                annotation,
+                AERIAL_LABEL_MAP,
+            )
+            collection.skipped_boxes += skipped
+            merge_counts(collection.excluded_classes, excluded_classes)
+            if not labels:
+                continue
+            content_hash = file_sha256(image_path)
+            collection.add_sample(
+                InsulatorSample(
+                    source="aerial",
+                    source_split=source_split,
+                    source_id=f"{source_split}/{image_name}",
+                    image_name=image_name,
+                    image_suffix=image_path.suffix.lower(),
+                    image_path=image_path,
+                    labels=labels,
+                    class_boxes=class_boxes,
+                    content_sha256=content_hash,
+                    duplicate_keys=supervisely_duplicate_keys(image_name, content_hash),
+                )
+            )
+    return collection
+
+
+def collect_dataset_ninja_insulator_samples(limit_per_source: int | None) -> InsulatorCollection:
+    archive = dataset_archive("insulator-defect-detection-DatasetNinja.tar")
+    collection = InsulatorCollection()
+    if archive is None:
+        return collection
+
+    with tarfile.open(archive) as tar:
+        names = tar.getnames()
+        for source_split in ["train", "val", "test"]:
+            ann_names = sorted(
+                name for name in names if name.startswith(f"{source_split}/ann/") and name.endswith(".json")
+            )
+            if limit_per_source is not None:
+                ann_names = ann_names[:limit_per_source]
+
+            for ann_name in tqdm(ann_names, desc=f"dataset-ninja-insulator:{source_split}"):
+                image_name = Path(ann_name).name.removesuffix(".json")
+                image_member_name = f"{source_split}/img/{image_name}"
+                try:
+                    annotation = json.loads(tar_member_text(tar, ann_name))
+                    image_member = tar.extractfile(image_member_name)
+                except (KeyError, FileNotFoundError):
+                    collection.skipped_images += 1
+                    continue
+                if image_member is None:
+                    collection.skipped_images += 1
+                    continue
+
+                image_bytes = image_member.read()
+                labels, skipped, class_boxes, excluded_classes = parse_supervisely_labels(
+                    annotation,
+                    AERIAL_LABEL_MAP,
+                )
+                collection.skipped_boxes += skipped
+                merge_counts(collection.excluded_classes, excluded_classes)
+                if not labels:
+                    continue
+                content_hash = bytes_sha256(image_bytes)
+                collection.add_sample(
+                    InsulatorSample(
+                        source="dataset-ninja",
+                        source_split=source_split,
+                        source_id=f"{source_split}/{image_name}",
+                        image_name=image_name,
+                        image_suffix=Path(image_name).suffix.lower(),
+                        image_archive=archive,
+                        image_member_name=image_member_name,
+                        labels=labels,
+                        class_boxes=class_boxes,
+                        content_sha256=content_hash,
+                        duplicate_keys=supervisely_duplicate_keys(image_name, content_hash),
+                    )
+                )
+    return collection
+
+
+def collect_substation_insulator_samples(limit_per_source: int | None) -> InsulatorCollection:
+    root = repo_root() / "dataset" / "raw" / "substation-equipment-15class"
+    collection = InsulatorCollection()
+    if not root.exists():
+        return collection
+
+    eligible: list[InsulatorSample] = []
+    label_files = sorted(path for path in root.rglob("*.txt") if path.name != "classes.txt")
+    for label_file in tqdm(label_files, desc="substation-insulator:scan"):
+        image_path = sibling_image(label_file)
+        lines: list[str] = []
+        file_class_boxes: dict[str, int] = {}
+
+        for raw_line in label_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if not raw_line.strip():
+                continue
+            parsed = parse_yolo_line(raw_line)
+            if parsed is None:
+                collection.skipped_boxes += 1
+                continue
+            source_class_id, values = parsed
+            target_class_name = SUBSTATION_INSULATOR_LABEL_MAP.get(source_class_id)
+            if target_class_name is None:
+                source_class_name = SUBSTATION_SOURCE_CLASSES.get(source_class_id, str(source_class_id))
+                key = f"substation_source_{source_class_id}:{source_class_name}"
+                collection.excluded_classes[key] = collection.excluded_classes.get(key, 0) + 1
+                continue
+
+            lines.append(label_line(target_class_name, values, INSULATOR_CLASS_NAME_TO_ID))
+            file_class_boxes[target_class_name] = file_class_boxes.get(target_class_name, 0) + 1
+
+        if not lines:
+            continue
+        if image_path is None:
+            collection.skipped_images += 1
+            continue
+
+        relative_label = label_file.relative_to(root)
+        content_hash = file_sha256(image_path)
+        eligible.append(
+            InsulatorSample(
+                source="substation",
+                source_split=relative_label.parts[0] if relative_label.parts else "unknown",
+                source_id=relative_label.as_posix(),
+                image_name=image_path.name,
+                image_suffix=image_path.suffix.lower(),
+                image_path=image_path,
+                labels=tuple(lines),
+                class_boxes=file_class_boxes,
+                content_sha256=content_hash,
+                duplicate_keys=(f"sha256:{content_hash}",),
+            )
+        )
+
+    for sample in eligible[:limit_per_source] if limit_per_source is not None else eligible:
+        collection.add_sample(sample)
+    return collection
+
+
+def collect_insulator_samples(limit_per_source: int | None) -> InsulatorCollection:
+    collection = InsulatorCollection()
+    for partial in [
+        collect_aerial_insulator_samples(limit_per_source),
+        collect_dataset_ninja_insulator_samples(limit_per_source),
+        collect_substation_insulator_samples(limit_per_source),
+    ]:
+        collection.merge(partial)
+    return collection
+
+
+def duplicate_group_samples(
+    samples: list[InsulatorSample],
+) -> tuple[list[InsulatorSample], dict[str, object]]:
+    if not samples:
+        return [], {
+            "totalSamples": 0,
+            "uniqueSamples": 0,
+            "duplicateGroups": 0,
+            "removedSamples": 0,
+            "groups": [],
+        }
+
+    parent = list(range(len(samples)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    owner_by_key: dict[str, int] = {}
+    for index, sample in enumerate(samples):
+        for key in sample.duplicate_keys:
+            owner = owner_by_key.get(key)
+            if owner is None:
+                owner_by_key[key] = index
+            else:
+                union(owner, index)
+
+    grouped: dict[int, list[InsulatorSample]] = {}
+    for index, sample in enumerate(samples):
+        grouped.setdefault(find(index), []).append(sample)
+
+    source_priority = {"aerial": 0, "dataset-ninja": 1, "substation": 2}
+
+    def canonical_key(sample: InsulatorSample) -> tuple[int, int, int, str, str]:
+        return (
+            int(sample.has_damage),
+            len(sample.labels),
+            -source_priority.get(sample.source, 99),
+            sample.source_split,
+            sample.source_id,
+        )
+
+    def sample_manifest(sample: InsulatorSample) -> dict[str, object]:
+        return {
+            "source": sample.source,
+            "sourceSplit": sample.source_split,
+            "sourceId": sample.source_id,
+            "imageName": sample.image_name,
+            "contentSha256": sample.content_sha256,
+            "classBoxes": sample.class_boxes,
+            "hasDamage": sample.has_damage,
+        }
+
+    unique_samples: list[InsulatorSample] = []
+    duplicate_groups: list[dict[str, object]] = []
+    for group_index, members in enumerate(grouped.values(), start=1):
+        canonical = max(members, key=canonical_key)
+        unique_samples.append(canonical)
+        if len(members) <= 1:
+            continue
+        keys = sorted({key for member in members for key in member.duplicate_keys})
+        duplicate_groups.append(
+            {
+                "groupId": f"dup-{group_index:05d}",
+                "canonical": sample_manifest(canonical),
+                "members": [sample_manifest(member) for member in sorted(members, key=lambda item: item.source_id)],
+                "removedSamples": len(members) - 1,
+                "keys": keys,
+            }
+        )
+
+    unique_samples.sort(key=lambda sample: sample.content_sha256)
+    return unique_samples, {
+        "totalSamples": len(samples),
+        "uniqueSamples": len(unique_samples),
+        "duplicateGroups": len(duplicate_groups),
+        "removedSamples": len(samples) - len(unique_samples),
+        "groupingKeys": ["sha256", "supervisely-filename"],
+        "groupsRecorded": min(len(duplicate_groups), 100),
+        "groupsTruncated": len(duplicate_groups) > 100,
+        "groups": duplicate_groups[:100],
+    }
+
+
+def split_insulator_samples(samples: list[InsulatorSample], seed: int = 0) -> dict[str, list[InsulatorSample]]:
+    splits: dict[str, list[InsulatorSample]] = {"train": [], "val": [], "test": []}
+
+    def stable_sort_key(sample: InsulatorSample) -> str:
+        return hashlib.sha256(f"{seed}:{sample.content_sha256}:{sample.source_id}".encode("utf-8")).hexdigest()
+
+    for stratum in [True, False]:
+        stratum_samples = sorted(
+            [sample for sample in samples if sample.has_damage is stratum],
+            key=stable_sort_key,
+        )
+        for index, sample in enumerate(stratum_samples):
+            splits[split_for_index(index, len(stratum_samples))].append(sample)
+
+    for split in splits:
+        splits[split].sort(key=stable_sort_key)
+    return splits
+
+
+def apply_train_sampling(
+    train_samples: list[InsulatorSample],
+    seed: int = 0,
+) -> tuple[list[tuple[InsulatorSample, int]], dict[str, object]]:
+    def stable_sort_key(sample: InsulatorSample) -> str:
+        return hashlib.sha256(f"sampling:{seed}:{sample.content_sha256}:{sample.source_id}".encode("utf-8")).hexdigest()
+
+    damage_samples = sorted([sample for sample in train_samples if sample.has_damage], key=stable_sort_key)
+    normal_only_samples = sorted([sample for sample in train_samples if not sample.has_damage], key=stable_sort_key)
+    original_normal_count = len(normal_only_samples)
+    normal_cap = original_normal_count
+    if damage_samples:
+        normal_cap = min(original_normal_count, len(damage_samples) * 3)
+    kept_normal_samples = normal_only_samples[:normal_cap]
+    removed_normal_samples = normal_only_samples[normal_cap:]
+
+    target_damage_count = len(damage_samples)
+    added_damage_repeats = 0
+    repeated_samples: list[tuple[InsulatorSample, int]] = []
+    if damage_samples and len(kept_normal_samples) > len(damage_samples) * 2:
+        target_damage_count = min(len(damage_samples) * 2, (len(kept_normal_samples) + 1) // 2)
+        added_damage_repeats = max(0, target_damage_count - len(damage_samples))
+        for sample in damage_samples[:added_damage_repeats]:
+            repeated_samples.append((sample, 1))
+
+    originals = [(sample, 0) for sample in sorted(kept_normal_samples + damage_samples, key=stable_sort_key)]
+    policy = {
+        "appliesTo": ["train"],
+        "valTestUnresampled": True,
+        "normalOnlyCap": {
+            "enabled": bool(damage_samples),
+            "maxNormalOnlyToDamagePositiveRatio": 3,
+            "originalTrainNormalOnlyImages": original_normal_count,
+            "keptTrainNormalOnlyImages": len(kept_normal_samples),
+            "removedTrainNormalOnlyImages": len(removed_normal_samples),
+        },
+        "damageRepeat": {
+            "enabled": added_damage_repeats > 0,
+            "maxAdditionalCopiesPerDamageImage": 1,
+            "originalTrainDamagePositiveImages": len(damage_samples),
+            "targetTrainDamagePositiveImages": target_damage_count,
+            "addedTrainDamageRepeatImages": added_damage_repeats,
+        },
+    }
+    return originals + repeated_samples, policy
+
+
+def write_insulator_sample(
+    output: Path,
+    split: str,
+    sample: InsulatorSample,
+    repeat_index: int,
+    tar_cache: dict[Path, tarfile.TarFile],
+) -> None:
+    source_stem = safe_text(f"{sample.source}_{safe_stem(Path(sample.source_id))}_{sample.content_sha256[:12]}")
+    repeat_suffix = "" if repeat_index == 0 else f"_repeat{repeat_index}"
+    image_suffix = sample.image_suffix if sample.image_suffix in IMAGE_SUFFIXES else ".jpg"
+    target_image = output / split / "images" / f"{source_stem}{repeat_suffix}{image_suffix}"
+    target_label = output / split / "labels" / f"{source_stem}{repeat_suffix}.txt"
+    if sample.image_bytes is not None:
+        target_image.write_bytes(sample.image_bytes)
+    elif sample.image_archive is not None and sample.image_member_name is not None:
+        tar = tar_cache.get(sample.image_archive)
+        if tar is None:
+            tar = tarfile.open(sample.image_archive)
+            tar_cache[sample.image_archive] = tar
+        image_member = tar.extractfile(sample.image_member_name)
+        if image_member is None:
+            raise FileNotFoundError(sample.image_member_name)
+        target_image.write_bytes(image_member.read())
+    elif sample.image_path is not None:
+        shutil.copy2(sample.image_path, target_image)
+    else:
+        raise ValueError(f"Sample {sample.source_id} has no image payload")
+    target_label.write_text("\n".join(sample.labels) + "\n", encoding="utf-8")
+
+
+def build_stats_from_output(
+    splits: dict[str, list[tuple[InsulatorSample, int]]],
+) -> ConversionStats:
+    stats = ConversionStats()
+    for split, samples in splits.items():
+        for sample, _repeat_index in samples:
+            stats.add(
+                f"{sample.source}:{sample.source_split}",
+                split,
+                1,
+                1,
+                len(sample.labels),
+                0,
+                0,
+                sample.class_boxes,
+            )
+    return stats
+
+
+def write_insulator_dataset(output: Path, limit_per_source: int | None) -> dict[str, object]:
+    collection = collect_insulator_samples(limit_per_source)
+    unique_samples, duplicate_summary = duplicate_group_samples(collection.samples)
+    split_samples = split_insulator_samples(unique_samples)
+    train_samples, sampling_policy = apply_train_sampling(split_samples["train"])
+    output_splits = {
+        "train": train_samples,
+        "val": [(sample, 0) for sample in split_samples["val"]],
+        "test": [(sample, 0) for sample in split_samples["test"]],
+    }
+
+    for split, samples in output_splits.items():
+        tar_cache: dict[Path, tarfile.TarFile] = {}
+        try:
+            for sample, repeat_index in tqdm(samples, desc=f"edgeeye-insulator-v1:{split}:write"):
+                write_insulator_sample(output, split, sample, repeat_index, tar_cache)
+        finally:
+            for tar in tar_cache.values():
+                tar.close()
+
+    total = build_stats_from_output(output_splits)
+    total.skipped_boxes += collection.skipped_boxes
+    total.skipped_images += collection.skipped_images
+    merge_counts(total.excluded_classes, collection.excluded_classes)
+
+    write_dataset_yaml(output, INSULATOR_CLASS_NAME_TO_ID)
+    write_insulator_metadata(output)
+
+    raw_split_counts = {
+        split: {
+            "images": len(samples),
+            "boxes": sum(len(sample.labels) for sample in samples),
+            "damagePositiveImages": sum(1 for sample in samples if sample.has_damage),
+            "normalOnlyImages": sum(1 for sample in samples if not sample.has_damage),
+            "classBoxes": {
+                name: sum(sample.class_boxes.get(name, 0) for sample in samples)
+                for name in INSULATOR_CLASS_NAME_TO_ID
+            },
+        }
+        for split, samples in split_samples.items()
+    }
+    manifest = {
+        "version": "edgeeye-insulator-v1",
+        "images": total.images,
+        "labels": total.labels,
+        "boxes": total.boxes,
+        "skippedBoxes": total.skipped_boxes,
+        "skippedImages": total.skipped_images,
+        "sources": total.sources,
+        "sourceSamplesScanned": collection.scanned,
+        "splits": total.splits,
+        "rawDuplicateSafeSplitsBeforeTrainSampling": raw_split_counts,
+        "classBoxes": {name: total.class_boxes.get(name, 0) for name in INSULATOR_CLASS_NAME_TO_ID},
+        "excludedClasses": total.excluded_classes,
+        "classMap": INSULATOR_CLASS_NAME_TO_ID,
+        "duplicateSummary": duplicate_summary,
+        "samplingPolicy": sampling_policy,
+        "inventory": inventory(),
+    }
+    (output / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def write_detector_dataset(output: Path, limit_per_source: int | None) -> dict[str, object]:
+    total = ConversionStats()
+    for stats in [
+        convert_aerial(output, limit_per_source),
+        convert_dataset_ninja_tar(output, limit_per_source),
+        convert_transformer_zip(output, limit_per_source),
+        convert_substation_equipment(output, limit_per_source),
+    ]:
+        total.merge(stats)
+
+    write_dataset_yaml(output)
+    copy_metadata(output)
+
+    manifest = {
+        "version": "edgeeye-detector-v1",
+        "images": total.images,
+        "labels": total.labels,
+        "boxes": total.boxes,
+        "skippedBoxes": total.skipped_boxes,
+        "skippedImages": total.skipped_images,
+        "sources": total.sources,
+        "splits": total.splits,
+        "classBoxes": {name: total.class_boxes.get(name, 0) for name in CLASS_NAME_TO_ID},
+        "excludedClasses": total.excluded_classes,
+        "classMap": CLASS_NAME_TO_ID,
+        "inventory": inventory(),
+    }
+    (output / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def inventory() -> dict[str, object]:
     root = repo_root()
     dataset_root = root / "dataset"
     archives = []
-    for path in [
-        dataset_root / "24060960.zip",
-        dataset_root / "Transformer Station Detection.v1i.yolov8.zip",
-        dataset_root / "insulator-defect-detection-DatasetNinja.tar",
+    for name in [
+        "24060960.zip",
+        "Transformer Station Detection.v1i.yolov8.zip",
+        "insulator-defect-detection-DatasetNinja.tar",
     ]:
-        if path.exists():
+        path = dataset_archive(name)
+        if path is not None:
             archives.append(archive_metadata(path))
 
     aerial_root = dataset_root / "raw" / "aerial-power-infrastructure-detection-train" / "project"
@@ -654,12 +1261,18 @@ def inventory() -> dict[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prepare the EdgeEye detector-v1 YOLO dataset.")
+    parser = argparse.ArgumentParser(description="Prepare EdgeEye YOLO datasets.")
+    parser.add_argument(
+        "--variant",
+        choices=["edgeeye-detector-v1", "edgeeye-insulator-v1"],
+        default="edgeeye-detector-v1",
+        help="Dataset contract to generate",
+    )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("../dataset/processed/edgeeye-detector-v1"),
-        help="Output dataset directory",
+        default=None,
+        help="Output dataset directory. Defaults to dataset/processed/<variant> under the repo root.",
     )
     parser.add_argument(
         "--limit-per-source",
@@ -674,42 +1287,51 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    output = args.output.resolve()
+    output = (
+        args.output.expanduser().resolve()
+        if args.output is not None
+        else repo_root() / "dataset" / "processed" / args.variant
+    )
     reset_output(output, args.overwrite)
 
-    total = ConversionStats()
-    for stats in [
-        convert_aerial(output, args.limit_per_source),
-        convert_dataset_ninja_tar(output, args.limit_per_source),
-        convert_transformer_zip(output, args.limit_per_source),
-        convert_substation_equipment(output, args.limit_per_source),
-    ]:
-        total.merge(stats)
+    if args.variant == "edgeeye-insulator-v1":
+        manifest = write_insulator_dataset(output, args.limit_per_source)
+    else:
+        manifest = write_detector_dataset(output, args.limit_per_source)
 
-    write_dataset_yaml(output)
-    copy_metadata(output)
-
-    manifest = {
-        "version": "edgeeye-detector-v1",
-        "images": total.images,
-        "labels": total.labels,
-        "boxes": total.boxes,
-        "skippedBoxes": total.skipped_boxes,
-        "skippedImages": total.skipped_images,
-        "sources": total.sources,
-        "splits": total.splits,
-        "classBoxes": {name: total.class_boxes.get(name, 0) for name in CLASS_NAME_TO_ID},
-        "excludedClasses": total.excluded_classes,
-        "classMap": CLASS_NAME_TO_ID,
-        "inventory": inventory(),
-    }
-    (output / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
+    duplicate_summary = manifest.get("duplicateSummary")
+    print(
+        json.dumps(
+            {
+                "version": manifest["version"],
+                "output": str(output),
+                "images": manifest["images"],
+                "labels": manifest["labels"],
+                "boxes": manifest["boxes"],
+                "splits": manifest["splits"],
+                "classBoxes": manifest["classBoxes"],
+                "duplicateSummary": {
+                    key: duplicate_summary[key]
+                    for key in [
+                        "totalSamples",
+                        "uniqueSamples",
+                        "duplicateGroups",
+                        "removedSamples",
+                        "groupsRecorded",
+                        "groupsTruncated",
+                    ]
+                    if isinstance(duplicate_summary, dict) and key in duplicate_summary
+                }
+                if isinstance(duplicate_summary, dict)
+                else None,
+                "samplingPolicy": manifest.get("samplingPolicy"),
+                "manifest": str(output / "manifest.json"),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
     )
-
-    print(json.dumps(manifest, indent=2, ensure_ascii=False))
-    if total.images == 0 or total.boxes == 0:
+    if int(manifest["images"]) == 0 or int(manifest["boxes"]) == 0:
         raise SystemExit("No training data was generated. Check raw dataset locations.")
     return 0
 

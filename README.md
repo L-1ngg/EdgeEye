@@ -153,6 +153,11 @@ classes: `insulator_normal`, `insulator_surface_damage`, `transformer_normal`,
 and `transformer_surface_damage`. Large raw archives and generated processed
 datasets stay ignored by git; commit only scripts, config, and lightweight docs.
 
+The optimized insulator-focused candidate is tracked separately as
+`edgeeye-insulator-v1`. It uses two classes, exports ONNX as
+`output0 [1,6,8400]`, and is not a direct replacement for the four-class
+`edgeeye-detector-v1` baseline without an explicit promotion decision.
+
 Prepare and validate the local dataset from `training/`:
 
 ```bash
@@ -165,8 +170,11 @@ uv run python validate_dataset.py \
 ```
 
 See [training/README.md](training/README.md), [dataset/README.md](dataset/README.md),
-and [dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)
-for source mappings, class distribution, and remaining training risks.
+[dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md),
+and
+[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)
+for source mappings, class distribution, optimization metrics, and remaining
+training risks.
 
 ## Configuration
 

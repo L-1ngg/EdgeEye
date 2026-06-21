@@ -182,17 +182,17 @@ config/local.example.yaml
     },
     {
       "id": 1,
-      "name": "insulator_defect",
+      "name": "insulator_surface_damage",
       "type": "fault"
     },
     {
       "id": 2,
-      "name": "foreign_object",
-      "type": "fault"
+      "name": "transformer_normal",
+      "type": "device"
     },
     {
       "id": 3,
-      "name": "bird_nest",
+      "name": "transformer_surface_damage",
       "type": "fault"
     }
   ]
@@ -201,7 +201,8 @@ config/local.example.yaml
 
 `type` 必须使用 [数据契约与接口规范](./contracts.md) 中的 `modelClassType` 枚举。`name` 必须能映射到 `deviceType` 或 `faultType`。
 `classes.json` 必须包含 `version`，后端和前端展示模型版本时使用该值。
-`bird_nest` 可在第一版映射为 `faultType: "foreign_object"`，避免新增接口枚举。
+若后续新增 `bird_nest` 等专门类别，可以先映射为 `faultType: "foreign_object"`，
+避免在模型试验阶段频繁扩展接口枚举。
 
 ### 推荐训练与部署主线
 
