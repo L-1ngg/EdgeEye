@@ -1002,10 +1002,40 @@ def split_insulator_samples(samples: list[InsulatorSample], seed: int = 0) -> di
     return splits
 
 
+def insulator_source_counts(samples: Iterable[InsulatorSample]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for sample in samples:
+        counts[sample.source] = counts.get(sample.source, 0) + 1
+    return counts
+
+
+def insulator_group_source_counts(samples: Iterable[InsulatorSample]) -> dict[str, dict[str, int]]:
+    groups = {
+        "damagePositive": [],
+        "normalOnly": [],
+    }
+    for sample in samples:
+        groups["damagePositive" if sample.has_damage else "normalOnly"].append(sample)
+    return {
+        group: insulator_source_counts(group_samples)
+        for group, group_samples in groups.items()
+    }
+
+
 def apply_train_sampling(
     train_samples: list[InsulatorSample],
     seed: int = 0,
+    normal_cap_ratio: float = 3,
+    damage_repeat: int = 1,
+    source_policy: str = "all",
 ) -> tuple[list[tuple[InsulatorSample, int]], dict[str, object]]:
+    if normal_cap_ratio < 0:
+        raise ValueError("--insulator-normal-cap-ratio must be non-negative")
+    if damage_repeat < 0:
+        raise ValueError("--insulator-damage-repeat must be non-negative")
+    if source_policy not in {"all", "domain-r1"}:
+        raise ValueError(f"Unsupported insulator source policy: {source_policy}")
+
     def stable_sort_key(sample: InsulatorSample) -> str:
         return hashlib.sha256(f"sampling:{seed}:{sample.content_sha256}:{sample.source_id}".encode("utf-8")).hexdigest()
 
@@ -1014,36 +1044,69 @@ def apply_train_sampling(
     original_normal_count = len(normal_only_samples)
     normal_cap = original_normal_count
     if damage_samples:
-        normal_cap = min(original_normal_count, len(damage_samples) * 3)
-    kept_normal_samples = normal_only_samples[:normal_cap]
-    removed_normal_samples = normal_only_samples[normal_cap:]
+        normal_cap = min(original_normal_count, int(len(damage_samples) * normal_cap_ratio))
+
+    if source_policy == "domain-r1":
+        preferred_normal_samples = [sample for sample in normal_only_samples if sample.source != "substation"]
+        substation_normal_samples = [sample for sample in normal_only_samples if sample.source == "substation"]
+        kept_normal_samples = (preferred_normal_samples + substation_normal_samples)[:normal_cap]
+    else:
+        kept_normal_samples = normal_only_samples[:normal_cap]
+
+    kept_ids = {id(sample) for sample in kept_normal_samples}
+    removed_normal_samples = [sample for sample in normal_only_samples if id(sample) not in kept_ids]
 
     target_damage_count = len(damage_samples)
     added_damage_repeats = 0
     repeated_samples: list[tuple[InsulatorSample, int]] = []
-    if damage_samples and len(kept_normal_samples) > len(damage_samples) * 2:
+    legacy_default_sampling = (
+        source_policy == "all"
+        and normal_cap_ratio == 3
+        and damage_repeat == 1
+    )
+    if legacy_default_sampling and damage_samples and len(kept_normal_samples) > len(damage_samples) * 2:
         target_damage_count = min(len(damage_samples) * 2, (len(kept_normal_samples) + 1) // 2)
         added_damage_repeats = max(0, target_damage_count - len(damage_samples))
         for sample in damage_samples[:added_damage_repeats]:
             repeated_samples.append((sample, 1))
+    elif damage_samples and damage_repeat:
+        for repeat_index in range(1, damage_repeat + 1):
+            for sample in damage_samples:
+                repeated_samples.append((sample, repeat_index))
+        added_damage_repeats = len(repeated_samples)
+        target_damage_count = len(damage_samples) + added_damage_repeats
 
     originals = [(sample, 0) for sample in sorted(kept_normal_samples + damage_samples, key=stable_sort_key)]
     policy = {
         "appliesTo": ["train"],
         "valTestUnresampled": True,
+        "sourcePolicy": {
+            "name": source_policy,
+            "description": (
+                "Keep damage-positive samples, prefer non-substation normal-only samples, "
+                "and cap substation normal-only samples as hard negatives."
+            )
+            if source_policy == "domain-r1"
+            else "Keep all sources subject only to train normal/damage sampling.",
+        },
         "normalOnlyCap": {
             "enabled": bool(damage_samples),
-            "maxNormalOnlyToDamagePositiveRatio": 3,
+            "maxNormalOnlyToDamagePositiveRatio": normal_cap_ratio,
             "originalTrainNormalOnlyImages": original_normal_count,
             "keptTrainNormalOnlyImages": len(kept_normal_samples),
             "removedTrainNormalOnlyImages": len(removed_normal_samples),
+            "originalTrainNormalOnlyImagesBySource": insulator_source_counts(normal_only_samples),
+            "keptTrainNormalOnlyImagesBySource": insulator_source_counts(kept_normal_samples),
+            "removedTrainNormalOnlyImagesBySource": insulator_source_counts(removed_normal_samples),
         },
         "damageRepeat": {
             "enabled": added_damage_repeats > 0,
-            "maxAdditionalCopiesPerDamageImage": 1,
+            "maxAdditionalCopiesPerDamageImage": damage_repeat,
+            "strategy": "legacy-balanced-subset" if legacy_default_sampling else "repeat-each-damage-sample",
             "originalTrainDamagePositiveImages": len(damage_samples),
             "targetTrainDamagePositiveImages": target_damage_count,
             "addedTrainDamageRepeatImages": added_damage_repeats,
+            "originalTrainDamagePositiveImagesBySource": insulator_source_counts(damage_samples),
         },
     }
     return originals + repeated_samples, policy
@@ -1098,11 +1161,46 @@ def build_stats_from_output(
     return stats
 
 
-def write_insulator_dataset(output: Path, limit_per_source: int | None) -> dict[str, object]:
+def split_source_audit(
+    splits: dict[str, list[InsulatorSample]],
+) -> dict[str, dict[str, object]]:
+    return {
+        split: {
+            "imagesBySource": insulator_source_counts(samples),
+            "imageGroupsBySource": insulator_group_source_counts(samples),
+        }
+        for split, samples in splits.items()
+    }
+
+
+def output_split_source_audit(
+    splits: dict[str, list[tuple[InsulatorSample, int]]],
+) -> dict[str, dict[str, object]]:
+    return {
+        split: {
+            "imagesBySource": insulator_source_counts(sample for sample, _repeat_index in samples),
+            "imageGroupsBySource": insulator_group_source_counts(sample for sample, _repeat_index in samples),
+        }
+        for split, samples in splits.items()
+    }
+
+
+def write_insulator_dataset(
+    output: Path,
+    limit_per_source: int | None,
+    normal_cap_ratio: float,
+    damage_repeat: int,
+    source_policy: str,
+) -> dict[str, object]:
     collection = collect_insulator_samples(limit_per_source)
     unique_samples, duplicate_summary = duplicate_group_samples(collection.samples)
     split_samples = split_insulator_samples(unique_samples)
-    train_samples, sampling_policy = apply_train_sampling(split_samples["train"])
+    train_samples, sampling_policy = apply_train_sampling(
+        split_samples["train"],
+        normal_cap_ratio=normal_cap_ratio,
+        damage_repeat=damage_repeat,
+        source_policy=source_policy,
+    )
     output_splits = {
         "train": train_samples,
         "val": [(sample, 0) for sample in split_samples["val"]],
@@ -1150,6 +1248,8 @@ def write_insulator_dataset(output: Path, limit_per_source: int | None) -> dict[
         "sourceSamplesScanned": collection.scanned,
         "splits": total.splits,
         "rawDuplicateSafeSplitsBeforeTrainSampling": raw_split_counts,
+        "rawDuplicateSafeSourceAuditBeforeTrainSampling": split_source_audit(split_samples),
+        "outputSourceAudit": output_split_source_audit(output_splits),
         "classBoxes": {name: total.class_boxes.get(name, 0) for name in INSULATOR_CLASS_NAME_TO_ID},
         "excludedClasses": total.excluded_classes,
         "classMap": INSULATOR_CLASS_NAME_TO_ID,
@@ -1285,6 +1385,24 @@ def main() -> int:
         action="store_true",
         help="Replace the output directory if it already contains files",
     )
+    parser.add_argument(
+        "--insulator-normal-cap-ratio",
+        type=float,
+        default=3,
+        help="Train-only normal-only to damage-positive image cap for edgeeye-insulator-v1.",
+    )
+    parser.add_argument(
+        "--insulator-damage-repeat",
+        type=int,
+        default=1,
+        help="Train-only maximum additional copies per damage-positive image for edgeeye-insulator-v1.",
+    )
+    parser.add_argument(
+        "--insulator-source-policy",
+        choices=["all", "domain-r1"],
+        default="all",
+        help="Train-only source/domain sampling policy for edgeeye-insulator-v1.",
+    )
     args = parser.parse_args()
 
     output = (
@@ -1295,7 +1413,13 @@ def main() -> int:
     reset_output(output, args.overwrite)
 
     if args.variant == "edgeeye-insulator-v1":
-        manifest = write_insulator_dataset(output, args.limit_per_source)
+        manifest = write_insulator_dataset(
+            output,
+            args.limit_per_source,
+            args.insulator_normal_cap_ratio,
+            args.insulator_damage_repeat,
+            args.insulator_source_policy,
+        )
     else:
         manifest = write_detector_dataset(output, args.limit_per_source)
 

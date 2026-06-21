@@ -24,6 +24,13 @@ The insulator-focused optimization candidate output is:
 dataset/processed/edgeeye-insulator-v1/
 ```
 
+Recall-focused successors must use distinct versioned output paths, for
+example:
+
+```text
+dataset/processed/edgeeye-insulator-v1-domain-r1/
+```
+
 Do not treat this output as source-controlled application code. It is generated
 training data and must remain ignored by git.
 
@@ -62,6 +69,23 @@ uv run python validate_dataset.py \
   --dataset ../dataset/processed/edgeeye-insulator-v1/dataset.yaml \
   --classes ../dataset/processed/edgeeye-insulator-v1/classes.json \
   --labels ../dataset/processed/edgeeye-insulator-v1/label.names
+```
+
+Source-style controlled insulator candidate command:
+
+```bash
+cd training
+uv run python prepare_dataset.py \
+  --variant edgeeye-insulator-v1 \
+  --output ../dataset/processed/edgeeye-insulator-v1-domain-r1 \
+  --insulator-source-policy domain-r1 \
+  --insulator-normal-cap-ratio 2 \
+  --insulator-damage-repeat 2 \
+  --overwrite
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-insulator-v1-domain-r1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-insulator-v1-domain-r1/classes.json \
+  --labels ../dataset/processed/edgeeye-insulator-v1-domain-r1/label.names
 ```
 
 Converter signature pattern:
@@ -113,9 +137,16 @@ Insulator-v1 candidate conversion rules:
 - Split unique samples by image-level damage presence into deterministic
   80/10/10 train/val/test partitions.
 - Apply normal-only downsampling and damage-positive repetition only to train.
+- Expose insulator train-only sampling as explicit CLI knobs:
+  `--insulator-normal-cap-ratio`, `--insulator-damage-repeat`, and
+  `--insulator-source-policy`.
+- `--insulator-source-policy all` preserves the legacy source behavior.
+- `--insulator-source-policy domain-r1` is not aerial-only; it keeps
+  damage-positive samples, prefers non-substation normal-only samples, and
+  keeps capped substation normal-only samples as hard negatives.
 - Keep validation and test real, duplicate-safe, and unresampled.
-- Record duplicate counts, raw duplicate-safe split counts, and train sampling
-  policy in `manifest.json` and the tracked dataset report.
+- Record duplicate counts, raw duplicate-safe split counts, source audits, and
+  train sampling policy in `manifest.json` and the tracked dataset report.
 
 Source mappings:
 
@@ -205,8 +236,8 @@ Required checks after source mapping changes:
   - expected split counts
   - skipped images and excluded classes documented in the dataset report
 - for insulator-v1, review `manifest.json` for exactly two target classes,
-  duplicate summary, raw duplicate-safe split counts, and train-only sampling
-  policy
+  duplicate summary, raw duplicate-safe split counts, source audit fields, and
+  train-only sampling policy
 
 ### 7. Wrong vs Correct
 

@@ -1,0 +1,309 @@
+{
+  "generatedAt": "2026-06-22T02:48:36+08:00",
+  "weights": "models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/best.pt",
+  "dataset": "dataset/processed/edgeeye-insulator-v1-domain-r1/dataset.yaml",
+  "manifest": "dataset/processed/edgeeye-insulator-v1-domain-r1/manifest.json",
+  "split": "val",
+  "imgsz": 640,
+  "thresholdScan": [
+    {
+      "conf": 0.25,
+      "iou": 0.45,
+      "all": {
+        "precision": 0.8141821226188184,
+        "recall": 0.7935659415712757,
+        "map50": 0.7579064072224945,
+        "map50_95": 0.4216312857939551
+      },
+      "classes": [
+        {
+          "id": 0,
+          "name": "insulator_normal",
+          "precision": 0.7772379837600817,
+          "recall": 0.8145486543961282,
+          "map50": 0.7629548925130897,
+          "map50_95": 0.46669692710931754
+        },
+        {
+          "id": 1,
+          "name": "insulator_surface_damage",
+          "precision": 0.8511262614775551,
+          "recall": 0.7725832287464233,
+          "map50": 0.7528579219318993,
+          "map50_95": 0.37656564447859264
+        }
+      ]
+    }
+  ],
+  "sourceAudit": {
+    "available": true,
+    "sourceSamplesScanned": {
+      "aerial:train": 1296,
+      "aerial:val": 144,
+      "dataset-ninja:train": 1296,
+      "dataset-ninja:val": 144,
+      "dataset-ninja:test": 160,
+      "substation:agv_day": 2194,
+      "substation:agv_night_dark": 180,
+      "substation:agv_night_light": 768,
+      "substation:misc": 3852
+    },
+    "sources": {
+      "substation:agv_day": 1234,
+      "substation:misc": 2079,
+      "substation:agv_night_light": 423,
+      "aerial:train": 3274,
+      "aerial:val": 380,
+      "substation:agv_night_dark": 86,
+      "dataset-ninja:test": 424
+    },
+    "rawDuplicateSafeSplitsBeforeTrainSampling": {
+      "train": {
+        "images": 6817,
+        "boxes": 107582,
+        "damagePositiveImages": 1239,
+        "normalOnlyImages": 5578,
+        "classBoxes": {
+          "insulator_normal": 104723,
+          "insulator_surface_damage": 2859
+        }
+      },
+      "val": {
+        "images": 852,
+        "boxes": 13970,
+        "damagePositiveImages": 155,
+        "normalOnlyImages": 697,
+        "classBoxes": {
+          "insulator_normal": 13637,
+          "insulator_surface_damage": 333
+        }
+      },
+      "test": {
+        "images": 853,
+        "boxes": 14260,
+        "damagePositiveImages": 155,
+        "normalOnlyImages": 698,
+        "classBoxes": {
+          "insulator_normal": 13911,
+          "insulator_surface_damage": 349
+        }
+      }
+    },
+    "rawDuplicateSafeSourceAuditBeforeTrainSampling": {
+      "train": {
+        "imagesBySource": {
+          "substation": 5534,
+          "aerial": 1146,
+          "dataset-ninja": 137
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 1107,
+            "dataset-ninja": 132
+          },
+          "normalOnly": {
+            "substation": 5534,
+            "aerial": 39,
+            "dataset-ninja": 5
+          }
+        }
+      },
+      "val": {
+        "imagesBySource": {
+          "substation": 691,
+          "aerial": 151,
+          "dataset-ninja": 10
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 145,
+            "dataset-ninja": 10
+          },
+          "normalOnly": {
+            "substation": 691,
+            "aerial": 6
+          }
+        }
+      },
+      "test": {
+        "imagesBySource": {
+          "substation": 697,
+          "aerial": 143,
+          "dataset-ninja": 13
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 143,
+            "dataset-ninja": 12
+          },
+          "normalOnly": {
+            "substation": 697,
+            "dataset-ninja": 1
+          }
+        }
+      }
+    },
+    "outputSourceAudit": {
+      "train": {
+        "imagesBySource": {
+          "substation": 2434,
+          "aerial": 3360,
+          "dataset-ninja": 401
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 3321,
+            "dataset-ninja": 396
+          },
+          "normalOnly": {
+            "substation": 2434,
+            "aerial": 39,
+            "dataset-ninja": 5
+          }
+        }
+      },
+      "val": {
+        "imagesBySource": {
+          "substation": 691,
+          "aerial": 151,
+          "dataset-ninja": 10
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 145,
+            "dataset-ninja": 10
+          },
+          "normalOnly": {
+            "substation": 691,
+            "aerial": 6
+          }
+        }
+      },
+      "test": {
+        "imagesBySource": {
+          "substation": 697,
+          "aerial": 143,
+          "dataset-ninja": 13
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 143,
+            "dataset-ninja": 12
+          },
+          "normalOnly": {
+            "substation": 697,
+            "dataset-ninja": 1
+          }
+        }
+      }
+    },
+    "processedDatasetSourceAudit": {
+      "train": {
+        "imagesBySource": {
+          "aerial": 3360,
+          "dataset-ninja": 401,
+          "substation": 2434
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 3321,
+            "dataset-ninja": 396
+          },
+          "normalOnly": {
+            "aerial": 39,
+            "dataset-ninja": 5,
+            "substation": 2434
+          }
+        },
+        "classBoxesById": {
+          "0": 49655,
+          "1": 8577
+        }
+      },
+      "val": {
+        "imagesBySource": {
+          "aerial": 151,
+          "dataset-ninja": 10,
+          "substation": 691
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 145,
+            "dataset-ninja": 10
+          },
+          "normalOnly": {
+            "aerial": 6,
+            "substation": 691
+          }
+        },
+        "classBoxesById": {
+          "0": 13637,
+          "1": 333
+        }
+      },
+      "test": {
+        "imagesBySource": {
+          "aerial": 143,
+          "dataset-ninja": 13,
+          "substation": 697
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 143,
+            "dataset-ninja": 12
+          },
+          "normalOnly": {
+            "dataset-ninja": 1,
+            "substation": 697
+          }
+        },
+        "classBoxesById": {
+          "0": 13911,
+          "1": 349
+        }
+      }
+    },
+    "samplingPolicy": {
+      "appliesTo": [
+        "train"
+      ],
+      "valTestUnresampled": true,
+      "sourcePolicy": {
+        "name": "domain-r1",
+        "description": "Keep damage-positive samples, prefer non-substation normal-only samples, and cap substation normal-only samples as hard negatives."
+      },
+      "normalOnlyCap": {
+        "enabled": true,
+        "maxNormalOnlyToDamagePositiveRatio": 2.0,
+        "originalTrainNormalOnlyImages": 5578,
+        "keptTrainNormalOnlyImages": 2478,
+        "removedTrainNormalOnlyImages": 3100,
+        "originalTrainNormalOnlyImagesBySource": {
+          "substation": 5534,
+          "aerial": 39,
+          "dataset-ninja": 5
+        },
+        "keptTrainNormalOnlyImagesBySource": {
+          "aerial": 39,
+          "dataset-ninja": 5,
+          "substation": 2434
+        },
+        "removedTrainNormalOnlyImagesBySource": {
+          "substation": 3100
+        }
+      },
+      "damageRepeat": {
+        "enabled": true,
+        "maxAdditionalCopiesPerDamageImage": 2,
+        "strategy": "repeat-each-damage-sample",
+        "originalTrainDamagePositiveImages": 1239,
+        "targetTrainDamagePositiveImages": 3717,
+        "addedTrainDamageRepeatImages": 2478,
+        "originalTrainDamagePositiveImagesBySource": {
+          "aerial": 1107,
+          "dataset-ninja": 132
+        }
+      }
+    }
+  }
+}

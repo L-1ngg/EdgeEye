@@ -26,6 +26,12 @@ it is explicitly promoted:
 models/edgeeye-insulator-v1-opt30-yolov8s-adamw/
 ```
 
+Recall-focused successors must use separate versioned packages, for example:
+
+```text
+models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/
+```
+
 Do not commit model weights, ONNX files, generated expected-output files,
 training runs, raw images, or processed images.
 
@@ -183,7 +189,7 @@ After a full baseline run:
 After an insulator-v1 candidate run:
 
 - Validate the candidate dataset with explicit `--dataset`, `--classes`, and
-  `--labels` paths under `dataset/processed/edgeeye-insulator-v1/`.
+  `--labels` paths under the exact processed candidate directory.
 - Export ONNX with opset 11 and verify `[1,3,640,640] -> [1,6,8400]`.
 - Generate expected outputs with explicit candidate dataset metadata paths.
 - Report metrics as a two-class, duplicate-safe split result and state that

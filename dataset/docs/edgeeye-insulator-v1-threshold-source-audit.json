@@ -1,0 +1,267 @@
+{
+  "generatedAt": "2026-06-22T01:37:33+08:00",
+  "weights": "models/edgeeye-insulator-v1-opt30-yolov8s-adamw/best.pt",
+  "dataset": "dataset/processed/edgeeye-insulator-v1/dataset.yaml",
+  "manifest": "dataset/processed/edgeeye-insulator-v1/manifest.json",
+  "split": "val",
+  "imgsz": 640,
+  "thresholdScan": [
+    {
+      "conf": 0.5,
+      "iou": 0.45,
+      "all": {
+        "precision": 0.9027845202519608,
+        "recall": 0.6069035597157617,
+        "map50": 0.5853524373395731,
+        "map50_95": 0.3389136034104408
+      },
+      "classes": [
+        {
+          "id": 0,
+          "name": "insulator_normal",
+          "precision": 0.8853562745464747,
+          "recall": 0.6942875999120041,
+          "map50": 0.6680856088373268,
+          "map50_95": 0.4373073413852254
+        },
+        {
+          "id": 1,
+          "name": "insulator_surface_damage",
+          "precision": 0.9202127659574468,
+          "recall": 0.5195195195195195,
+          "map50": 0.5026192658418195,
+          "map50_95": 0.2405198654356561
+        }
+      ]
+    },
+    {
+      "conf": 0.35,
+      "iou": 0.45,
+      "all": {
+        "precision": 0.8279359994796706,
+        "recall": 0.6896560342699523,
+        "map50": 0.6593402436676279,
+        "map50_95": 0.3707316809693493
+      },
+      "classes": [
+        {
+          "id": 0,
+          "name": "insulator_normal",
+          "precision": 0.8303400840657241,
+          "recall": 0.796729485957322,
+          "map50": 0.7543095513926217,
+          "map50_95": 0.4795088615782343
+        },
+        {
+          "id": 1,
+          "name": "insulator_surface_damage",
+          "precision": 0.825531914893617,
+          "recall": 0.5825825825825826,
+          "map50": 0.5643709359426341,
+          "map50_95": 0.26195450036046414
+        }
+      ]
+    },
+    {
+      "conf": 0.25,
+      "iou": 0.45,
+      "all": {
+        "precision": 0.7870931025721266,
+        "recall": 0.7242850388703582,
+        "map50": 0.691724532811068,
+        "map50_95": 0.38422384368476176
+      },
+      "classes": [
+        {
+          "id": 0,
+          "name": "insulator_normal",
+          "precision": 0.7907850314054623,
+          "recall": 0.8329544621251008,
+          "map50": 0.7867672071238605,
+          "map50_95": 0.4949632279358278
+        },
+        {
+          "id": 1,
+          "name": "insulator_surface_damage",
+          "precision": 0.7834011737387909,
+          "recall": 0.6156156156156156,
+          "map50": 0.5966818584982756,
+          "map50_95": 0.27348445943369565
+        }
+      ]
+    },
+    {
+      "conf": 0.15,
+      "iou": 0.45,
+      "all": {
+        "precision": 0.7902061689319233,
+        "recall": 0.7218669134779716,
+        "map50": 0.7218641824931223,
+        "map50_95": 0.39490504247112806
+      },
+      "classes": [
+        {
+          "id": 0,
+          "name": "insulator_normal",
+          "precision": 0.7928594557044125,
+          "recall": 0.8311212143433306,
+          "map50": 0.8169582866498004,
+          "map50_95": 0.5063276602432308
+        },
+        {
+          "id": 1,
+          "name": "insulator_surface_damage",
+          "precision": 0.7875528821594341,
+          "recall": 0.6126126126126126,
+          "map50": 0.6267700783364443,
+          "map50_95": 0.28348242469902507
+        }
+      ]
+    }
+  ],
+  "sourceAudit": {
+    "available": true,
+    "sourceSamplesScanned": {
+      "aerial:train": 1296,
+      "aerial:val": 144,
+      "dataset-ninja:train": 1296,
+      "dataset-ninja:val": 144,
+      "dataset-ninja:test": 160,
+      "substation:agv_day": 2194,
+      "substation:agv_night_dark": 180,
+      "substation:agv_night_light": 768,
+      "substation:misc": 3852
+    },
+    "sources": {
+      "substation:agv_day": 1641,
+      "substation:misc": 2752,
+      "substation:agv_night_light": 566,
+      "aerial:train": 1784,
+      "aerial:val": 196,
+      "substation:agv_night_dark": 119,
+      "dataset-ninja:test": 223
+    },
+    "rawDuplicateSafeSplitsBeforeTrainSampling": {
+      "train": {
+        "images": 6817,
+        "boxes": 107582,
+        "damagePositiveImages": 1239,
+        "normalOnlyImages": 5578,
+        "classBoxes": {
+          "insulator_normal": 104723,
+          "insulator_surface_damage": 2859
+        }
+      },
+      "val": {
+        "images": 852,
+        "boxes": 13970,
+        "damagePositiveImages": 155,
+        "normalOnlyImages": 697,
+        "classBoxes": {
+          "insulator_normal": 13637,
+          "insulator_surface_damage": 333
+        }
+      },
+      "test": {
+        "images": 853,
+        "boxes": 14260,
+        "damagePositiveImages": 155,
+        "normalOnlyImages": 698,
+        "classBoxes": {
+          "insulator_normal": 13911,
+          "insulator_surface_damage": 349
+        }
+      }
+    },
+    "processedDatasetSourceAudit": {
+      "train": {
+        "imagesBySource": {
+          "aerial": 1686,
+          "dataset-ninja": 200,
+          "substation": 3690
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 1663,
+            "dataset-ninja": 196
+          },
+          "normalOnly": {
+            "aerial": 23,
+            "dataset-ninja": 4,
+            "substation": 3690
+          }
+        },
+        "classBoxesById": {
+          "0": 70940,
+          "1": 4232
+        }
+      },
+      "val": {
+        "imagesBySource": {
+          "aerial": 151,
+          "dataset-ninja": 10,
+          "substation": 691
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 145,
+            "dataset-ninja": 10
+          },
+          "normalOnly": {
+            "aerial": 6,
+            "substation": 691
+          }
+        },
+        "classBoxesById": {
+          "0": 13637,
+          "1": 333
+        }
+      },
+      "test": {
+        "imagesBySource": {
+          "aerial": 143,
+          "dataset-ninja": 13,
+          "substation": 697
+        },
+        "imageGroupsBySource": {
+          "damagePositive": {
+            "aerial": 143,
+            "dataset-ninja": 12
+          },
+          "normalOnly": {
+            "dataset-ninja": 1,
+            "substation": 697
+          }
+        },
+        "classBoxesById": {
+          "0": 13911,
+          "1": 349
+        }
+      }
+    },
+    "samplingPolicy": {
+      "appliesTo": [
+        "train"
+      ],
+      "valTestUnresampled": true,
+      "normalOnlyCap": {
+        "enabled": true,
+        "maxNormalOnlyToDamagePositiveRatio": 3,
+        "originalTrainNormalOnlyImages": 5578,
+        "keptTrainNormalOnlyImages": 3717,
+        "removedTrainNormalOnlyImages": 1861
+      },
+      "damageRepeat": {
+        "enabled": true,
+        "maxAdditionalCopiesPerDamageImage": 1,
+        "originalTrainDamagePositiveImages": 1239,
+        "targetTrainDamagePositiveImages": 1859,
+        "addedTrainDamageRepeatImages": 620
+      }
+    },
+    "notes": [
+      "Manifest does not contain structured source audit fields.",
+      "processedDatasetSourceAudit was inferred from generated file prefixes and label files."
+    ]
+  }
+}

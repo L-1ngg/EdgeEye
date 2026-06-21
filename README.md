@@ -153,10 +153,12 @@ classes: `insulator_normal`, `insulator_surface_damage`, `transformer_normal`,
 and `transformer_surface_damage`. Large raw archives and generated processed
 datasets stay ignored by git; commit only scripts, config, and lightweight docs.
 
-The optimized insulator-focused candidate is tracked separately as
-`edgeeye-insulator-v1`. It uses two classes, exports ONNX as
-`output0 [1,6,8400]`, and is not a direct replacement for the four-class
-`edgeeye-detector-v1` baseline without an explicit promotion decision.
+The optimized insulator-focused candidates are tracked separately under
+`edgeeye-insulator-v1*`. They use two classes, export ONNX as
+`output0 [1,6,8400]`, and are not direct replacements for the four-class
+`edgeeye-detector-v1` baseline without an explicit promotion decision. The
+current recall-first candidate is
+`edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`.
 
 Prepare and validate the local dataset from `training/`:
 
@@ -171,8 +173,9 @@ uv run python validate_dataset.py \
 
 See [training/README.md](training/README.md), [dataset/README.md](dataset/README.md),
 [dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md),
+[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md),
 and
-[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)
+[dataset/docs/edgeeye-insulator-v1-domain-r1-report.md](dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)
 for source mappings, class distribution, optimization metrics, and remaining
 training risks.
 

@@ -102,6 +102,28 @@ applies normal-image downsampling plus light damage-image repetition only to the
 training split. Validation and test remain real, duplicate-safe, and
 unresampled.
 
+The recall-focused source-style controlled candidate uses a separate output
+path and explicit train-only sampling knobs:
+
+```bash
+cd training
+uv run python prepare_dataset.py \
+  --variant edgeeye-insulator-v1 \
+  --output ../dataset/processed/edgeeye-insulator-v1-domain-r1 \
+  --insulator-source-policy domain-r1 \
+  --insulator-normal-cap-ratio 2 \
+  --insulator-damage-repeat 2 \
+  --overwrite
+uv run python validate_dataset.py \
+  --dataset ../dataset/processed/edgeeye-insulator-v1-domain-r1/dataset.yaml \
+  --classes ../dataset/processed/edgeeye-insulator-v1-domain-r1/classes.json \
+  --labels ../dataset/processed/edgeeye-insulator-v1-domain-r1/label.names
+```
+
+`domain-r1` is not aerial-only. It keeps Aerial and DatasetNinja
+damage-positive samples, keeps same-source normal boxes, and keeps capped
+substation normal-only samples as hard negatives.
+
 ## Train
 
 Use a small dry run first:
@@ -164,8 +186,35 @@ uv run python train.py \
   --deterministic
 ```
 
-This candidate changes the class contract, so do not copy it over
-`models/edgeeye-detector-v1/` without an explicit promotion decision.
+The current recall-first domain-r1 candidate was trained separately:
+
+```bash
+cd training
+uv run python train.py \
+  --data ../dataset/processed/edgeeye-insulator-v1-domain-r1/dataset.yaml \
+  --model yolov8s.pt \
+  --epochs 30 \
+  --imgsz 640 \
+  --batch 8 \
+  --device 0 \
+  --workers 4 \
+  --name edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw \
+  --copy-best-to ../models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/best.pt \
+  --patience 12 \
+  --optimizer AdamW \
+  --lr0 0.002 \
+  --lrf 0.01 \
+  --cos-lr \
+  --mosaic 0.9 \
+  --close-mosaic 5 \
+  --mixup 0.0 \
+  --copy-paste 0.1 \
+  --seed 0 \
+  --deterministic
+```
+
+Both insulator candidates change the class contract, so do not copy either one
+over `models/edgeeye-detector-v1/` without an explicit promotion decision.
 
 ## Export ONNX
 
@@ -187,6 +236,13 @@ uv run python export_onnx.py \
   --output ../models/edgeeye-insulator-v1-opt30-yolov8s-adamw/best.onnx \
   --imgsz 640 \
   --opset 11
+```
+
+For the domain-r1 candidate, use the same export command shape with:
+
+```text
+weights: ../models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/best.pt
+output:  ../models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/best.onnx
 ```
 
 The four-class detector exports `output0 [1,8,8400]`. The two-class insulator
@@ -235,14 +291,19 @@ uv run python generate_expected_output.py \
 This file is generated from development-machine inference and remains ignored
 under `models/`.
 
+For `edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`, use the corresponding
+`edgeeye-insulator-v1-domain-r1` dataset metadata and package paths.
+
 ## Outputs
 
 Generated files are written under ignored directories:
 
 - `dataset/processed/edgeeye-detector-v1/`
 - `dataset/processed/edgeeye-insulator-v1/`
+- `dataset/processed/edgeeye-insulator-v1-domain-r1/`
 - `models/edgeeye-detector-v1/`
 - `models/edgeeye-insulator-v1-opt30-yolov8s-adamw/`
+- `models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/`
 - `training/runs/`
 - `runs/`
 
