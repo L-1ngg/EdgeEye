@@ -1,0 +1,14 @@
+{
+  "version": "classes-v1",
+  "modelVersion": "detector-transformer-v1",
+  "classes": [
+    {
+      "id": 0,
+      "name": "transformer",
+      "category": "transformer",
+      "type": "device",
+      "deviceType": "transformer",
+      "faultType": null
+    }
+  ]
+}

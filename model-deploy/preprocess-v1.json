@@ -1,0 +1,19 @@
+{
+  "version": "preprocess-v1",
+  "modelVersion": "detector-transformer-v1",
+  "inputWidth": 640,
+  "inputHeight": 640,
+  "colorFormat": "RGB",
+  "normalize": {
+    "mean": [0, 0, 0],
+    "std": [255, 255, 255]
+  },
+  "letterbox": true,
+  "confidenceThreshold": 0.1,
+  "nmsThreshold": 0.45,
+  "output": {
+    "name": "output0",
+    "shape": [1, 5, 8400],
+    "format": "cxcywh plus class confidence, no built-in NMS"
+  }
+}
