@@ -7,6 +7,7 @@
 - [x] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
 - [ ] Ask user to confirm model assets: ONNX/OM path, `classes.json`, `label.names`, input size, confidence threshold, IoU threshold.
 - [ ] Ask user to confirm backend base URL reachable from board.
+- [x] Record current temporary ONNX asset path and model limits: `models/artifacts/detector-transformer-v1.onnx` is a one-class `transformer` detect model and remains a local ignored artifact.
 
 ## Phase 1: Repository Inspection Before Code
 
@@ -39,18 +40,22 @@
 
 ## Phase 4: Model Runner and Postprocess
 
-- [ ] Implement a common runner interface.
+- [x] Add a local ONNX debug bridge for image-based inference and payload generation: `model-deploy/edge_onnx_bridge.py`.
+- [x] Add current model metadata files: `model-deploy/classes-v1.json`, `model-deploy/label.names`, and `model-deploy/preprocess-v1.json`.
+- [ ] Implement a common runner interface for the final edge process.
 - [ ] Implement debug/mock runner first if Atlas runtime cannot be verified in this environment.
 - [ ] Implement ACL/OM runner on board once user confirms CANN/ACL availability.
 - [ ] Implement preprocessing: BGR to RGB, resize, normalize, HWC to CHW, batch dimension.
 - [ ] Implement YOLO output decoding, confidence filter, coordinate scaling, NMS, and class mapping.
-- [ ] Validate bbox and enum output before upload.
+- [x] Validate local ONNX debug bridge output against backend `DetectionUploadRequest`.
+- [ ] Validate bbox and enum output inside the final edge process before upload.
 
 ## Phase 5: Key Frames, Annotation, Upload
 
 - [ ] Implement annotation writer and save `annotated/{inspectionId}/{frameId}.jpg`.
 - [ ] Implement key-frame selector for periodic, started, updated, resolved, manual, and system-event reasons.
 - [x] Implement payload builder matching `DetectionUploadRequest` with empty `detections` for no-model realtime display inside backend service code.
+- [x] Implement payload builder matching `DetectionUploadRequest` with model detections in the local ONNX debug bridge.
 - [x] Implement local outbox save on upload failure.
 - [ ] Implement backend uploader with retries and idempotency handling.
 
@@ -117,6 +122,24 @@ Current integration direction:
 - Backend tests set `settings.camera_bridge_enabled = False` to keep hardware out of pytest.
 - The frontend uses `/api/camera/stream.mjpg` for smooth live video and polls latest-result every 1 second for metadata, so users only start backend and frontend.
 - The backend no longer saves every displayed frame. It samples raw frames at `EDGEEYE_CAMERA_INTERVAL_SECONDS` and prunes old no-model samples with `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION`.
+
+Commands run for the 2026-06-21 ONNX debug bridge scaffold:
+
+```bash
+python3 -m py_compile model-deploy/edge_onnx_bridge.py
+python3 model-deploy/edge_onnx_bridge.py --help
+python3 -m json.tool model-deploy/classes-v1.json
+python3 -m json.tool model-deploy/preprocess-v1.json
+unzip -p dataset/artifacts/transformer-roboflow-v2-yolov8.zip test/images/20210713_144152_jpg.rf.c57ccafabfe838548f29ca2546bc9b8a.jpg > /tmp/edgeeye-transformer-test.jpg
+python3 model-deploy/edge_onnx_bridge.py --image /tmp/edgeeye-transformer-test.jpg --frame-id frame-000001 --inspection-id inspection-local-0001 --payload-output /tmp/edgeeye-payload.json
+backend/.venv/bin/python -c "import json; import sys; sys.path.insert(0, 'backend'); from app.models.inspection import DetectionUploadRequest; payload=json.load(open('/tmp/edgeeye-payload.json')); DetectionUploadRequest(**payload); print('payload validation ok')"
+```
+
+Results:
+
+- The bridge generated `transformer` detections from the current ONNX model.
+- The generated payload passed backend `DetectionUploadRequest` validation.
+- The current model only maps to `deviceType: transformer` and `faultType: null`; it is useful for device-box display but not fault/alarm generation.
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 

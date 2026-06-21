@@ -17,6 +17,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
 | [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Active |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Active |
+| [Detection Upload Adapters](./detection-upload-adapters.md) | Edge/model adapter payload contract and ONNX debug bridge rules | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 
@@ -48,5 +49,6 @@ The goal is to help AI assistants and new team members understand how YOUR proje
 ## Pre-Development Checklist
 
 - Read `directory-structure.md` before adding backend modules.
+- Read `detection-upload-adapters.md` before changing edge/model adapter output or the detection upload payload.
 - Read `quality-guidelines.md` before adding or changing endpoints.
 - Keep API response fields aligned with `docs/contracts.md` and `docs/openapi.yaml`.

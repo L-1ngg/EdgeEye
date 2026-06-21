@@ -48,6 +48,10 @@
 - 2026-06-18 前端已按现有 API 增加实时快照轮询：登录后每 1 秒刷新一次 `/api/inspections/{inspectionId}/latest-result` 链路，不新增接口参数或启动步骤。
 - 2026-06-19 为解决 1 FPS 抓拍轮询卡顿和 raw 文件持续增长，实时显示改为后端内置 `GET /api/camera/stream.mjpg` MJPEG 长连接；latest-result 继续负责检测框、性能、故障和报告证据数据。
 - 2026-06-19 后端摄像头桥默认使用单个 ffmpeg MJPEG 长进程作为摄像头拥有者；实时流不落盘，后台仅按 `EDGEEYE_CAMERA_INTERVAL_SECONDS` 保存低频 raw 样本，并按 `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` 清理旧样本。
+- 2026-06-21 已整理模型与数据集 artifacts 目录：当前本地 ONNX 位于 `models/artifacts/detector-transformer-v1.onnx`，数据集 zip 位于 `dataset/artifacts/transformer-roboflow-v2-yolov8.zip`，两者均被 Git 忽略。
+- 2026-06-21 已新增 ONNX 调试桥 `model-deploy/edge_onnx_bridge.py`，配套 `classes-v1.json`、`label.names` 和 `preprocess-v1.json`；该桥可从图片运行当前 ONNX，做 YOLO detect 后处理，并生成符合 `DetectionUploadRequest` 的 payload。
+- 当前模型是单类 `transformer` detect 模型，只能映射为 `deviceType: "transformer"`、`faultType: null`；可用于设备检测展示链路，不会触发故障、告警或维修建议。
+- 当前 ONNX 调试桥已用本地样例图片跑通，并用后端 `DetectionUploadRequest` Pydantic 模型校验通过；尚未替代正式 Atlas `ONNX -> OM -> ACL` 路线。
 
 ## Requirements
 
@@ -111,9 +115,10 @@
 - [x] 已新增后端 MJPEG 实时流 `GET /api/camera/stream.mjpg`，前端实时页优先使用该流显示画面。
 - [x] 实时显示不按视频帧落盘；无模型 raw 样本改为低频保存并限制每次巡检保留数量。
 - [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
-- [ ] 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过边界校验。
+- [x] 已提供本地 ONNX 调试路径 `model-deploy/edge_onnx_bridge.py`，真实 OM/ACL 暂不可用时可先用开发机 ONNX 打通检测 payload 链路。
+- [x] 当前 ONNX 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过后端请求模型边界校验。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
-- [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功。
+- [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前 ONNX 调试桥已实现可选 POST，但尚未在运行中的后端服务上做端到端上传复测。
 - [ ] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
 - [ ] 能显示或记录 latency、FPS、CPU、内存和 NPU 使用率。
 - [ ] 摄像头断开、模型加载失败、ACL 错误和上传失败都有明确日志。
