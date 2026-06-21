@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-06-21
+- **Total Sessions**: 11
+- **Last Active**: 2026-06-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~338 | Active |
+| `journal-1.md` | ~371 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-06-22 | Insulator recall domain-r1 candidate | `8f55600` | `main` |
 | 10 | 2026-06-21 | Insulator model optimization candidate | `a65c127` | `main` |
 | 9 | 2026-06-21 | 模型训练实现 | `90ffc12` | `main` |
 | 8 | 2026-06-19 | Bootstrap project guidelines | `d599b28` | `main` |

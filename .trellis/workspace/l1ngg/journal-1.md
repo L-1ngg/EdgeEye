@@ -336,3 +336,36 @@ Added edgeeye-insulator-v1 duplicate-aware dataset conversion, trained/exported 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Insulator recall domain-r1 candidate
+
+**Date**: 2026-06-22
+**Task**: Insulator recall domain-r1 candidate
+**Branch**: `main`
+
+### Summary
+
+Added the domain-r1 source-style controlled insulator dataset policy, trained and exported the 30-epoch YOLOv8s candidate, recorded validation/source audits, and documented the promotion recommendation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8f55600` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
