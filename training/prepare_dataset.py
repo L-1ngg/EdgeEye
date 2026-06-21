@@ -210,7 +210,7 @@ def merge_counts(target: dict[str, int], source: dict[str, int]) -> None:
 
 def write_dataset_yaml(output: Path) -> None:
     data = {
-        "path": ".",
+        "path": output.resolve().as_posix(),
         "train": "train/images",
         "val": "val/images",
         "test": "test/images",

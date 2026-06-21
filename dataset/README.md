@@ -46,6 +46,8 @@ dataset/
   - Test split: 890 images, 890 label files, 18,285 boxes.
   - Total: 10,411 images, 10,411 label files, 145,382 boxes.
 - Detailed cleanup report: `dataset/docs/edgeeye-detector-v1-report.md`.
+- Baseline training and Atlas handoff report:
+  `dataset/docs/edgeeye-detector-v1-baseline-report.md`.
 
 ### Aerial Power Infrastructure Detection Train Dataset
 

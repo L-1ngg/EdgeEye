@@ -71,6 +71,23 @@ uv run python train.py \
 For the real first pass, increase `--epochs` after validating the converted
 labels visually and checking the class distribution.
 
+The current detector-v1 baseline was trained with:
+
+```bash
+cd training
+uv run python train.py \
+  --data ../dataset/processed/edgeeye-detector-v1/dataset.yaml \
+  --model yolov8n.pt \
+  --epochs 50 \
+  --imgsz 640 \
+  --batch 8 \
+  --device 0 \
+  --name edgeeye-detector-v1
+```
+
+See `dataset/docs/edgeeye-detector-v1-baseline-report.md` for the recorded
+metrics, hashes, and Atlas handoff notes.
+
 ## Export ONNX
 
 ```bash
@@ -85,6 +102,24 @@ uv run python export_onnx.py \
 The Atlas `.om` conversion is expected to run on the CANN/Ascend environment
 recorded in `docs/01-edge-atlas.md`.
 
+## Generate Expected Outputs
+
+After exporting the final checkpoint, regenerate the Atlas comparison fixture:
+
+```bash
+cd training
+uv run python generate_expected_output.py \
+  --weights ../models/edgeeye-detector-v1/best.pt \
+  --output ../models/edgeeye-detector-v1/expected-output-v1.json \
+  --split test \
+  --min-cases 5 \
+  --max-candidates 200 \
+  --device 0
+```
+
+This file is generated from development-machine inference and remains ignored
+under `models/`.
+
 ## Outputs
 
 Generated files are written under ignored directories:
@@ -92,5 +127,6 @@ Generated files are written under ignored directories:
 - `dataset/processed/edgeeye-detector-v1/`
 - `models/edgeeye-detector-v1/`
 - `training/runs/`
+- `runs/`
 
 Commit only the scripts, configs, and small metadata files in this directory.

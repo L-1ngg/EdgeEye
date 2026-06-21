@@ -7,12 +7,16 @@ from pathlib import Path
 from ultralytics import YOLO
 
 
+TRAINING_DIR = Path(__file__).resolve().parent
+REPO_ROOT = TRAINING_DIR.parent
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train the EdgeEye YOLO detector.")
     parser.add_argument(
         "--data",
         type=Path,
-        default=Path("../dataset/processed/edgeeye-detector-v1/dataset.yaml"),
+        default=REPO_ROOT / "dataset" / "processed" / "edgeeye-detector-v1" / "dataset.yaml",
         help="YOLO dataset.yaml path",
     )
     parser.add_argument("--model", default="yolov8n.pt", help="Base Ultralytics model")
@@ -24,17 +28,20 @@ def main() -> int:
     parser.add_argument(
         "--project",
         type=Path,
-        default=Path("runs"),
+        default=TRAINING_DIR / "runs",
         help="Ultralytics output project directory",
     )
     parser.add_argument("--name", default="edgeeye-detector-v1")
     parser.add_argument(
         "--copy-best-to",
         type=Path,
-        default=Path("../models/edgeeye-detector-v1/best.pt"),
+        default=REPO_ROOT / "models" / "edgeeye-detector-v1" / "best.pt",
         help="Stable copy path for the best checkpoint",
     )
     args = parser.parse_args()
+    args.data = args.data.expanduser().resolve()
+    args.project = args.project.expanduser().resolve()
+    args.copy_best_to = args.copy_best_to.expanduser().resolve()
 
     model = YOLO(args.model)
     train_kwargs = {
