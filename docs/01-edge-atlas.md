@@ -60,8 +60,9 @@
 
 当前镜像中已生成绝缘子候选 `.om` 模型，路径为
 `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`。
-该文件是本地 artifact，被 `.gitignore` 忽略，不进入 Git。下一步是把 OM
-推理接入边缘端实时链路，并在拿到 expected-output 对应测试图片后做逐图输出对比。
+该文件是本地 artifact，被 `.gitignore` 忽略，不进入 Git。后端摄像头桥
+现在会对低频 sample frame 尝试调用 ACL/OM 推理，并在拿到
+expected-output 对应测试图片后再做逐图输出对比。
 
 ## 当前模型接入壳子
 
@@ -136,10 +137,17 @@ HOME=/tmp atc \
   `memory_size=24779264 B`，`weight_size=22340096 B`。
 - pyACL 最小执行 smoke 通过：输入 `images [1,3,640,640]`，输出
   `[1,6,8400]`，全零输入单次 `acl.mdl.execute` 约 `26.659 ms`。
+- 已新增 `model-deploy/edge_acl_om_bridge.py`：读取一张 JPEG，复用
+  `edge_onnx_bridge.py` 的预处理、YOLO 后处理和类别映射，通过 pyACL
+  执行上述 OM，并输出后端可校验的 detections JSON。
+- 后端内置摄像头桥保存 sampled raw frame 后，会调用该 ACL bridge；成功时
+  保存 `/uploads/annotated/{inspectionId}/{frameId}.jpg` 并通过原有
+  `POST /api/detection/results` 写入 detections，失败时降级为空检测但不影响
+  MJPEG 实时流。
 - 当前本机没有 `model-deploy/expected-output-edgeeye-insulator-v1.json`
   中记录的 `dataset/processed/...` 测试图片，因此尚未做逐图输出数值对比。
 
-当前模型只输出一类：
+早期 transformer ONNX 调试模型只输出一类：
 
 ```json
 {
@@ -149,7 +157,9 @@ HOME=/tmp atc \
 }
 ```
 
-因此它只能先用于设备检测框展示，不会触发后端故障、告警或维修建议。若后续要产生故障事件，成员2需要交付可映射到 `faultType` 的类别，例如 `surface_damage`、`rust`、`foreign_object`、`smoke` 或 `fire`。
+因此它只能先用于设备检测框展示，不会触发后端故障、告警或维修建议。当前绝缘子
+domain-r1 OM 已能输出 `insulator_surface_damage`，可映射为后端
+`faultType: "surface_damage"`。
 
 本地单图验证命令：
 

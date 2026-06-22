@@ -114,13 +114,15 @@ logic.
 ### 1. Scope / Trigger
 
 - Trigger: backend-owned infrastructure that captures USB camera frames for the
-  no-model realtime milestone.
+  realtime milestone and optionally runs sampled frames through the Atlas OM
+  bridge.
 - Applies when adding startup/shutdown workers, camera capture helpers, or
   backend-visible image writers.
 
 ### 2. Signatures
 
 - Service module: `backend/app/services/camera_bridge.py`.
+- Model subprocess wrapper: `backend/app/services/edge_model.py`.
 - Lifecycle entry point: `camera_bridge_service.start()` in `app.main.lifespan`;
   `camera_bridge_service.stop()` in lifespan shutdown.
 - Display route: `GET /api/camera/stream.mjpg` lives in
@@ -138,14 +140,28 @@ logic.
   `CAMERA_HEIGHT`, `CAMERA_INTERVAL_SECONDS`, `CAMERA_STREAM_FPS`,
   `CAMERA_TIMEOUT_SECONDS`, `CAMERA_MAX_RAW_FRAMES_PER_INSPECTION`,
   `CAMERA_DEVICE_ID`, `CAMERA_OPERATOR`, and `CAMERA_OUTBOX_DIR`.
+- Sampled model inference uses `EDGEEYE_` env keys:
+  `EDGE_MODEL_ENABLED`, `EDGE_MODEL_PYTHON`, `EDGE_MODEL_SCRIPT`,
+  `EDGE_MODEL_PATH`, `EDGE_MODEL_CLASSES_PATH`,
+  `EDGE_MODEL_PREPROCESS_PATH`, `EDGE_MODEL_OUTPUT_SHAPE`,
+  `EDGE_MODEL_DEVICE_ID`, `EDGE_MODEL_TIMEOUT_SECONDS`, and
+  `EDGE_MODEL_ANNOTATED_ENABLED`.
 - Realtime display frames are served from the in-memory MJPEG stream and are not
   persisted one file per video frame.
 - Raw frames must be saved under
   `uploads/raw/{inspectionId}/{frameId}.jpg` and exposed as
   `/uploads/raw/{inspectionId}/{frameId}.jpg` only for sampled latest-result /
   evidence frames.
-- The no-model bridge writes `detections: []`, `annotatedImageUrl: null`,
-  `uploadReason: periodic_sample`, and `performance.npuUsage: null`.
+- When model inference succeeds, annotated frames are saved under
+  `uploads/annotated/{inspectionId}/{frameId}.jpg`, `detections` comes from
+  the bridge output, and `annotatedImageUrl` is the matching `/uploads/...`
+  URL.
+- When model inference is disabled or unavailable, the bridge writes
+  `detections: []`, `annotatedImageUrl: null`, `uploadReason: periodic_sample`,
+  and `performance.npuUsage: null`.
+- If `uv run` shadows `python3` with `backend/.venv/bin/python3`, the model
+  subprocess must resolve to a system Python that can import board-provided
+  `cv2`, `numpy`, and `acl`.
 
 ### 4. Validation & Error Matrix
 
@@ -155,22 +171,32 @@ logic.
 - `GET /api/camera/stream.mjpg` when disabled/missing camera/ffmpeg -> return
   `CAMERA_STREAM_UNAVAILABLE` with HTTP 503 before streaming starts.
 - capture command failure -> log warning and continue the loop.
+- missing model/script/classes/preprocess path -> log once and upload the
+  sampled frame as empty detections.
+- model subprocess timeout/non-zero exit/invalid JSON -> log once and upload
+  the sampled frame as empty detections.
 - upload failure after payload construction -> write JSON to
   `CAMERA_OUTBOX_DIR`.
 - raw sample count over `CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` -> delete oldest
   no-model raw sample files for that inspection.
+- annotated sample count over `CAMERA_MAX_RAW_FRAMES_PER_INSPECTION` -> delete
+  oldest annotated sample files for that inspection.
 
 ### 5. Good/Base/Bad Cases
 
 - Good: service code owns capture, in-memory streaming, low-frequency sampling,
-  and payload building; the only camera route is the read-only MJPEG display
-  route.
+  optional sampled-frame model inference, annotation, and payload building; the
+  only camera route is the read-only MJPEG display route.
 - Base: backend starts without a camera and still serves all APIs.
-- Bad: adding a third required startup command for the no-model realtime bridge.
+- Bad: importing `cv2`, `numpy`, or `acl` at FastAPI import time so backend
+  tests or startup fail on machines without board runtime packages.
+- Bad: adding a third required startup command for the realtime bridge.
 
 ### 6. Tests Required
 
 - Unit tests for frame ID/path helpers and payload fields.
+- Unit tests for model subprocess JSON parsing, path resolution, and graceful
+  disabled/missing-resource behavior.
 - Unit tests for MJPEG part framing, JPEG chunk extraction, and raw-frame
   retention pruning.
 - Route tests for `/api/camera/stream.mjpg` success-path media type and 503
@@ -200,3 +226,25 @@ def stream_camera() -> StreamingResponse:
 payload = build_camera_payload(...)
 get_service().upload_detection_result(payload)
 ```
+
+#### Wrong
+
+```python
+import cv2
+import acl
+
+def start() -> None:
+    ...
+```
+
+This makes backend import depend on Atlas runtime packages.
+
+#### Correct
+
+```python
+result = edge_model_service.infer_frame(captured.path, annotated_path)
+payload = build_camera_payload(..., detections=result.detections if result else [])
+```
+
+The model path is optional and failure degrades one sample, not the API process
+or MJPEG stream.

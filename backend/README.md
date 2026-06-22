@@ -15,12 +15,15 @@ Default API base URL:
 http://localhost:8000/api
 ```
 
-When `/dev/video0` is present, the backend also starts a no-model camera bridge
-in the same process. The bridge keeps one ffmpeg MJPEG reader open, exposes
-`GET /api/camera/stream.mjpg` for the frontend live view, and periodically
-saves a bounded raw-frame sample under `/uploads/raw/{inspectionId}/{frameId}.jpg`
-for latest-result/evidence metadata. It does not continuously record MP4 files
-or save every video frame.
+When `/dev/video0` is present, the backend also starts a camera bridge in the
+same process. The bridge keeps one ffmpeg MJPEG reader open, exposes
+`GET /api/camera/stream.mjpg` for the frontend live view, periodically saves a
+bounded raw-frame sample under `/uploads/raw/{inspectionId}/{frameId}.jpg`, and
+tries to run the configured Atlas OM model for that sample. Successful model
+results populate the existing `detections` field and save
+`/uploads/annotated/{inspectionId}/{frameId}.jpg`; model failures degrade to an
+empty-detection sample without stopping the realtime stream. The bridge does
+not continuously record MP4 files or save every video frame.
 
 ## Configuration
 
@@ -35,6 +38,15 @@ Environment variables use the `EDGEEYE_` prefix:
 - `EDGEEYE_CAMERA_INTERVAL_SECONDS`: sample/evidence interval for latest-result. Defaults to `5.0`.
 - `EDGEEYE_CAMERA_STREAM_FPS`: MJPEG live-view frame rate. Defaults to `30`.
 - `EDGEEYE_CAMERA_MAX_RAW_FRAMES_PER_INSPECTION`: maximum retained no-model raw samples per inspection. Defaults to `120`.
+- `EDGEEYE_EDGE_MODEL_ENABLED`: run Atlas OM inference on sampled camera frames. Defaults to `true`.
+- `EDGEEYE_EDGE_MODEL_PYTHON`: Python executable used for the ACL bridge script. Use a system Python with `cv2`, `numpy`, and `acl`; the current board uses `/usr/local/miniconda3/bin/python3`.
+- `EDGEEYE_EDGE_MODEL_SCRIPT`: one-frame ACL bridge script. Defaults to `model-deploy/edge_acl_om_bridge.py`.
+- `EDGEEYE_EDGE_MODEL_PATH`: OM model path. Defaults to the insulator domain-r1 OM artifact.
+- `EDGEEYE_EDGE_MODEL_CLASSES_PATH`: class mapping JSON for backend detection enums.
+- `EDGEEYE_EDGE_MODEL_PREPROCESS_PATH`: model preprocessing and threshold JSON.
+- `EDGEEYE_EDGE_MODEL_OUTPUT_SHAPE`: YOLO output tensor shape. Defaults to `1,6,8400`.
+- `EDGEEYE_EDGE_MODEL_DEVICE_ID`: Atlas device id. Defaults to `0`.
+- `EDGEEYE_EDGE_MODEL_ANNOTATED_ENABLED`: save annotated sample images. Defaults to `true`.
 - `EDGEEYE_LLM_PROVIDER`: reserved provider selector. Defaults to `rule-template`.
 - `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
 - `EDGEEYE_LLM_API_KEY`: optional backend-only LLM API key. It is never returned to the frontend.
@@ -54,7 +66,7 @@ When no provider is configured or the provider call fails, `POST /api/advice/gen
 - The backend serves `EDGEEYE_UPLOADS_DIR` at `/uploads` and `EDGEEYE_REPORTS_DIR` at `/reports`.
 - Every detection bbox is validated against the uploaded image dimensions: `0 <= x1 < x2 <= imageWidth` and `0 <= y1 < y2 <= imageHeight`.
 - `performance.npuUsage` may be `null` when board-side NPU metrics are unavailable.
-- The built-in camera bridge is only a no-model realtime display bridge. Real YOLO/Atlas inference should later populate the existing `detections` field without changing the upload route.
+- The built-in camera bridge runs real YOLO/Atlas inference on sampled frames when the configured OM and pyACL runtime are available. It still uses the existing detection upload route and falls back to empty detections if model inference is unavailable.
 - The realtime frontend should use `GET /api/camera/stream.mjpg` for smooth display and keep `GET /api/inspections/{id}/latest-result` for detection boxes, faults, performance, and report evidence references.
 
 ## Member 4 Endpoints

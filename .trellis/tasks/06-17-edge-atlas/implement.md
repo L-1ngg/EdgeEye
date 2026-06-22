@@ -49,9 +49,12 @@
 - [x] Update `.trellis/spec/backend/detection-upload-adapters.md` with the local smoke baseline artifact convention.
 - [ ] Implement a common runner interface for the final edge process.
 - [ ] Implement debug/mock runner first if Atlas runtime cannot be verified in this environment.
-- [ ] Implement ACL/OM runner on board once user confirms CANN/ACL availability.
-- [ ] Implement preprocessing: BGR to RGB, resize, normalize, HWC to CHW, batch dimension.
-- [ ] Implement YOLO output decoding, confidence filter, coordinate scaling, NMS, and class mapping.
+- [x] Implement one-frame ACL/OM bridge on board once user confirms CANN/ACL availability:
+  `model-deploy/edge_acl_om_bridge.py`.
+- [x] Implement preprocessing for the ACL bridge: BGR to RGB, resize/letterbox,
+  normalize, HWC to CHW, batch dimension.
+- [x] Implement YOLO output decoding, confidence filter, coordinate scaling,
+  NMS, and class mapping for the ACL bridge by reusing the ONNX bridge helpers.
 - [x] Validate local ONNX debug bridge output against backend `DetectionUploadRequest`.
 - [x] Validate the 5 local teammate-provided test images through the ONNX debug bridge; generated payloads all pass backend request model validation.
 - [x] Add tracked insulator candidate deploy metadata:
@@ -64,22 +67,28 @@
 - [x] Inspect the generated OM model info.
 - [x] Run minimal pyACL execution smoke and confirm output shape `[1,6,8400]`.
 - [ ] Compare OM/ACL output with `model-deploy/expected-output-edgeeye-insulator-v1.json`; blocked until the ignored `dataset/processed/...` fixture images are available locally.
-- [ ] Validate bbox and enum output inside the final edge process before upload.
+- [x] Validate bbox and enum output in the backend sampled-frame path before upload via
+  `DetectionUploadRequest` and focused pytest coverage.
 
 ## Phase 5: Key Frames, Annotation, Upload
 
-- [ ] Implement annotation writer and save `annotated/{inspectionId}/{frameId}.jpg` in the final edge process.
+- [x] Implement annotation writer and save `annotated/{inspectionId}/{frameId}.jpg` in the backend sampled-frame path.
 - [x] Generate local annotated smoke images through `edge_onnx_bridge.py` under ignored `model-deploy/artifacts/transformer-v1-test-images/annotated/`.
 - [ ] Implement key-frame selector for periodic, started, updated, resolved, manual, and system-event reasons.
 - [x] Implement payload builder matching `DetectionUploadRequest` with empty `detections` for no-model realtime display inside backend service code.
 - [x] Implement payload builder matching `DetectionUploadRequest` with model detections in the local ONNX debug bridge.
+- [x] Extend the backend camera payload builder to accept model detections and
+  `annotatedImageUrl` without changing the upload API.
 - [x] Implement local outbox save on upload failure.
-- [ ] Implement backend uploader with retries and idempotency handling.
+- [x] Reuse the backend `InspectionService.upload_detection_result` path for
+  sampled-frame uploads, including existing idempotency behavior.
 
 ## Phase 6: Health and Operations
 
 - [x] Add frontend realtime display through backend MJPEG stream while keeping latest-result polling for metadata.
 - [x] Add bounded raw-frame retention for no-model samples.
+- [x] Add backend model configuration for OM path, class/preprocess JSON,
+  output shape, Atlas device id, annotated image toggle, and system Python path.
 - [ ] Add local health surface reporting camera, model, ACL, performance, outbox, and backend status.
 - [ ] Add clear startup and shutdown lifecycle, releasing camera/model/ACL resources.
 - [ ] Add board-side runbook for environment checks, model conversion, startup, and common failures.
@@ -266,6 +275,54 @@ Results:
 - Case-by-case comparison with `expected-output-edgeeye-insulator-v1.json` is
   still pending because the referenced `dataset/processed/...` fixture images
   are ignored and absent from this checkout.
+
+Commands run for the 2026-06-22 backend camera-to-OM integration:
+
+```bash
+python3 -m py_compile \
+  model-deploy/edge_acl_om_bridge.py \
+  backend/app/services/edge_model.py \
+  backend/app/services/camera_bridge.py \
+  backend/app/core/config.py
+cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest
+python3 model-deploy/edge_acl_om_bridge.py \
+  --model models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om \
+  --image backend/uploads/raw/inspection-20260622-0007/frame-000058.jpg \
+  --classes model-deploy/classes-edgeeye-insulator-v1.json \
+  --preprocess model-deploy/preprocess-edgeeye-insulator-v1.json \
+  --annotated-output /tmp/edgeeye-om-smoke.jpg \
+  --output-shape 1,6,8400
+cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+curl -sS http://127.0.0.1:8000/api/health
+curl -sS 'http://127.0.0.1:8000/api/inspections?pageSize=1'
+curl -sS http://127.0.0.1:8000/api/inspections/inspection-20260622-0010/latest-result
+curl -sS --max-time 2 http://127.0.0.1:8000/api/camera/stream.mjpg -o /tmp/edgeeye-stream-smoke.mjpg -w "%{http_code} %{size_download}\n"
+cd web && bun run dev --host 0.0.0.0 --port 5173
+curl -sS -I http://127.0.0.1:5173/
+```
+
+Results:
+
+- Backend pytest passed: `23 passed, 1 warning`.
+- Direct ACL/OM bridge smoke on a real camera sample succeeded with output
+  `imageWidth=640`, `imageHeight=480`, `latencyMs=26.294`, `fps=38.031`, and
+  `detections=[]` because the current camera frame did not contain an
+  insulator target.
+- First backend integration attempt exposed two environment issues and both
+  were fixed: `uv run` shadowed `python3` with `.venv/bin/python3` lacking
+  `cv2/numpy`, and relative raw image paths were interpreted from the project
+  root inside the bridge subprocess.
+- Running backend now creates raw and annotated sampled frames under
+  `backend/uploads/raw/inspection-20260622-0010/` and
+  `backend/uploads/annotated/inspection-20260622-0010/`.
+- Latest result for `inspection-20260622-0010` returned
+  `annotatedImageUrl=/uploads/annotated/inspection-20260622-0010/frame-000014.jpg`,
+  dimensions `640x480`, `performance.latencyMs=21.63`, and empty detections
+  for the current scene.
+- MJPEG stream smoke returned HTTP `200` and downloaded bytes before the
+  expected long-connection timeout.
+- Frontend dev server is running at `http://192.168.137.2:5173/` and returned
+  HTTP `200` for the root page.
 
 ## Review Gates
 

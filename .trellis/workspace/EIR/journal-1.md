@@ -53,3 +53,24 @@
 - Remaining model validation gap: expected-output fixture images live under
   ignored `dataset/processed/...` paths and are absent, so numerical output
   comparison is still pending.
+
+## 2026-06-22 - Camera sample to OM bridge
+
+- Added `model-deploy/edge_acl_om_bridge.py`, which reuses the ONNX bridge
+  preprocess/postprocess helpers but executes the insulator OM through pyACL.
+- Integrated the backend camera bridge with an `edge_model` service: sampled
+  frames are saved raw, sent through the ACL bridge, annotated under
+  `/uploads/annotated/...`, then uploaded through the existing
+  `DetectionUploadRequest` path. Model failures degrade to empty detections and
+  do not stop the MJPEG stream.
+- Fixed two board-specific integration issues discovered during live startup:
+  `uv run` shadows `python3` with `backend/.venv/bin/python3` lacking
+  `cv2/numpy`, so the model subprocess resolves to the board system Python;
+  raw/annotated paths are passed to the bridge as absolute paths.
+- Verified direct ACL/OM smoke on a real camera sample:
+  `640x480`, `26.294 ms`, `detections=[]` for the current non-insulator scene.
+- Verified live backend integration: latest result for
+  `inspection-20260622-0010` includes both raw and annotated URLs and model
+  latency. Backend tests passed with `23 passed, 1 warning`.
+- Started backend on `0.0.0.0:8000` and frontend on
+  `http://192.168.137.2:5173/` for user inspection.

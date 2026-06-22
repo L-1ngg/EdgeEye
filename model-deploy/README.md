@@ -97,6 +97,24 @@ atc --mode=6 \
   --om=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om
 ```
 
+Run one image through the Atlas ACL/OM bridge and emit backend-ready detection
+JSON:
+
+```bash
+python3 model-deploy/edge_acl_om_bridge.py \
+  --model models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om \
+  --image /path/to/frame.jpg \
+  --classes model-deploy/classes-edgeeye-insulator-v1.json \
+  --preprocess model-deploy/preprocess-edgeeye-insulator-v1.json \
+  --annotated-output /tmp/edgeeye-annotated.jpg \
+  --output-shape 1,6,8400
+```
+
+The backend camera bridge calls this script for sampled frames when
+`EDGEEYE_EDGE_MODEL_ENABLED=true`, parses the JSON output, saves the annotated
+image under `/uploads/annotated/...`, and uploads detections through the
+existing `POST /api/detection/results` contract.
+
 After OM/ACL inference is available, compare its class mapping, bbox range, and
 confidence values against `expected-output-edgeeye-insulator-v1.json`. Use the
 fixture tolerances instead of exact floating-point equality.

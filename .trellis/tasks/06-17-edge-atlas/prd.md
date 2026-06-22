@@ -60,7 +60,12 @@
 - 2026-06-22 绝缘子 domain-r1 候选本地 artifacts 已存在：ONNX/PT/delivery tar 位于 `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw*`，大文件均被 Git 忽略；ONNX/PT SHA-256 与远程报告一致。
 - 2026-06-22 已补充 Atlas 侧小型部署元数据：`model-deploy/classes-edgeeye-insulator-v1.json`、`label-edgeeye-insulator-v1.names`、`preprocess-edgeeye-insulator-v1.json`、`expected-output-edgeeye-insulator-v1.json`。
 - 绝缘子 domain-r1 候选是两类 YOLOv8 detect 模型：输入 `images [1,3,640,640]`，输出 `output0 [1,6,8400]`，类别为 `insulator_normal` 和 `insulator_surface_damage`，推荐阈值 `conf=0.25`、`iou=0.45`。
-- 2026-06-22 已在当前 310B4 板端用 ATC 生成绝缘子候选 OM，并完成最小 pyACL 执行 smoke；尚未接入实时边缘端循环，也未做 expected-output 逐图数值对比。
+- 2026-06-22 已在当前 310B4 板端用 ATC 生成绝缘子候选 OM，并完成最小 pyACL 执行 smoke；尚未做 expected-output 逐图数值对比。
+- 2026-06-22 已新增 `model-deploy/edge_acl_om_bridge.py`，复用 ONNX 调试桥的预处理、YOLO 后处理和类别映射，通过 pyACL 执行绝缘子 OM 并输出后端可校验的 detections JSON。
+- 2026-06-22 后端内置摄像头桥已接入 OM bridge：每个低频 sample frame 先保存 raw JPEG，再尝试调用 OM 推理，成功时保存 `uploads/annotated/{inspectionId}/{frameId}.jpg` 并通过现有 `POST /api/detection/results` 上传 detections；模型失败时降级为空检测但 MJPEG 实时流继续。
+- 2026-06-22 由于 `uv run` 会把 `python3` 解析到 backend `.venv`，而该环境没有 `cv2/numpy`，后端模型服务会把默认 `python3` 优先解析到当前板端系统解释器 `/usr/local/miniconda3/bin/python3`；`.env.example` 也记录了该路径。
+- 2026-06-22 使用现有摄像头样本 `backend/uploads/raw/inspection-20260622-0007/frame-000058.jpg` 跑通 ACL/OM 单帧 smoke：输出图片尺寸 `640x480`，latency `26.294 ms`，由于画面中没有绝缘子目标，detections 为 `[]`。
+- 2026-06-22 启动后端后，最新巡检 `inspection-20260622-0010` 已持续生成 raw/annotated sampled frames；`latest-result` 返回 `annotatedImageUrl=/uploads/annotated/inspection-20260622-0010/frame-000014.jpg`、`imageWidth=640`、`imageHeight=480`、`performance.latencyMs=21.63`，当前摄像头画面 detections 仍为空。
 
 ## Requirements
 
@@ -123,7 +128,7 @@
 - [x] OpenCV 当前无法直接打开 `/dev/video0` 的问题已通过 ffmpeg/V4L2 可替换 capture backend 绕开；默认配置使用 ffmpeg。
 - [x] 已新增后端 MJPEG 实时流 `GET /api/camera/stream.mjpg`，前端实时页优先使用该流显示画面。
 - [x] 实时显示不按视频帧落盘；无模型 raw 样本改为低频保存并限制每次巡检保留数量。
-- [ ] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
+- [x] Atlas 能运行至少一个目标检测模型；若真实 OM/ACL 暂不可用，必须提供可替代的本地 mock/ONNX 调试路径并明确切换条件。
 - [x] 已提供本地 ONNX 调试路径 `model-deploy/edge_onnx_bridge.py`，真实 OM/ACL 暂不可用时可先用开发机 ONNX 打通检测 payload 链路。
 - [x] 当前 ONNX 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过后端请求模型边界校验。
 - [x] 成员2当前测试版模型元数据已记录：单类 `transformer`、YOLOv8 detect、输入 `640x640`、`conf=0.25`、`iou=0.45`。
@@ -132,13 +137,13 @@
 - [x] 绝缘子 domain-r1 候选完成 `ONNX -> OM` ATC 转换，并记录生成的 `.om` 路径与模型信息。
 - [x] 绝缘子 domain-r1 候选完成 Atlas ACL 最小执行 smoke，确认 OM 能加载和输出 `[1,6,8400]`。
 - [ ] 用 `model-deploy/expected-output-edgeeye-insulator-v1.json` 对应测试图片做 OM/ACL 逐图输出对比；当前 checkout 缺少 ignored `dataset/processed/...` 图片。
-- [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
-- [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前 ONNX 调试桥已实现可选 POST，但尚未在运行中的后端服务上做端到端上传复测。
-- [ ] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
-- [ ] 能显示或记录 latency、FPS、CPU、内存和 NPU 使用率。
-- [ ] 摄像头断开、模型加载失败、ACL 错误和上传失败都有明确日志。
+- [x] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
+- [x] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前后端内置摄像头桥已在运行中的后端服务上做端到端上传复测。
+- [x] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
+- [x] 能显示或记录 latency、FPS、CPU、内存和 NPU 使用率；当前 `npuUsage` 仍按契约降级为 `null`。
+- [x] 摄像头断开、模型加载失败、ACL 错误和上传失败都有明确日志。
 - [ ] 连续运行不少于 30 分钟的稳定性测试有记录。
-- [ ] 前端可以通过后端看到来自边缘端的最新检测结果。
+- [x] 前端可以通过后端看到来自边缘端的最新检测结果。
 
 ## Out of Scope
 
@@ -150,11 +155,11 @@
 
 ## Open Questions
 
-- 当前 ONNX 测试模型和绝缘子候选模型阈值已确认；绝缘子候选 OM 已生成并通过最小 pyACL 执行 smoke，但还没有接入实时边缘端推理服务。
+- 当前 ONNX 测试模型和绝缘子候选模型阈值已确认；绝缘子候选 OM 已生成并接入后端 sampled frame 推理链路，但当前摄像头画面没有绝缘子目标，因此 detections 为空。
 - 后端联调地址是否已可从开发板访问尚未确认。
 - 成员2四类 `edgeeye-detector-v1` 和两类 `edgeeye-insulator-v1-domain-r1` 训练报告已交付；当前优先用绝缘子两类候选做破损演示评审，但它不自动替换四类基线。
 - 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
-- ATC/OM/ACL 路线暂不执行；下一阶段可继续完善上传、后端可访问图片路径和后端端到端复测。
+- expected-output 逐图数值对比仍被缺失的 ignored `dataset/processed/...` 测试图片阻塞。
 
 ## Notes
 

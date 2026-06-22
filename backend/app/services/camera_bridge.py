@@ -6,13 +6,14 @@ import shutil
 import subprocess
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
-from app.models.inspection import DetectionUploadRequest, Performance, StartInspectionRequest
+from app.models.inspection import Detection, DetectionUploadRequest, Performance, StartInspectionRequest
+from app.services.edge_model import edge_model_service
 from app.services.inspection_service import current_timestamp, get_service
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,21 @@ class CameraBridgeService:
                 frame_id=frame_id,
                 backend=self._active_backend or "ffmpeg-stream",
             )
+            annotated_path = (
+                annotated_frame_path(Path(settings.uploads_dir), inspection_id, frame_id)
+                if settings.edge_model_annotated_enabled
+                else None
+            )
+            model_result = edge_model_service.infer_frame(captured.path, annotated_path)
+            detections: Sequence[Detection] = model_result.detections if model_result is not None else []
+            annotated_image_url = (
+                annotated_frame_url(inspection_id, frame_id)
+                if model_result is not None and model_result.annotated_image_path is not None
+                else None
+            )
+            image_width = model_result.image_width if model_result is not None else settings.camera_width
+            image_height = model_result.image_height if model_result is not None else settings.camera_height
+            model_latency_ms = model_result.latency_ms if model_result is not None else 0.0
             cpu_usage, memory_usage = stats.snapshot()
             payload = build_camera_payload(
                 inspection_id=inspection_id,
@@ -214,9 +230,11 @@ class CameraBridgeService:
                 timestamp=timestamp,
                 device_id=settings.camera_device_id,
                 image_url=captured.image_url,
-                image_width=settings.camera_width,
-                image_height=settings.camera_height,
-                latency_ms=captured.latency_ms,
+                annotated_image_url=annotated_image_url,
+                image_width=image_width,
+                image_height=image_height,
+                detections=detections,
+                latency_ms=captured.latency_ms + model_latency_ms,
                 fps=fps,
                 cpu_usage=cpu_usage,
                 memory_usage=memory_usage,
@@ -227,11 +245,17 @@ class CameraBridgeService:
                 inspection_id=inspection_id,
                 keep_count=settings.camera_max_raw_frames_per_inspection,
             )
+            prune_annotated_frames(
+                uploads_dir=Path(settings.uploads_dir),
+                inspection_id=inspection_id,
+                keep_count=settings.camera_max_raw_frames_per_inspection,
+            )
             logger.info(
-                "camera sample uploaded inspection_id=%s frame_id=%s result_id=%s image_url=%s",
+                "camera sample uploaded inspection_id=%s frame_id=%s result_id=%s detections=%s image_url=%s",
                 inspection_id,
                 frame_id,
                 result.resultId,
+                len(detections),
                 captured.image_url,
             )
             return True
@@ -275,6 +299,14 @@ def raw_frame_url(inspection_id: str, frame_id: str) -> str:
     return f"/uploads/raw/{inspection_id}/{frame_id}.jpg"
 
 
+def annotated_frame_path(uploads_dir: Path, inspection_id: str, frame_id: str) -> Path:
+    return uploads_dir / "annotated" / inspection_id / f"{frame_id}.jpg"
+
+
+def annotated_frame_url(inspection_id: str, frame_id: str) -> str:
+    return f"/uploads/annotated/{inspection_id}/{frame_id}.jpg"
+
+
 def build_camera_payload(
     *,
     inspection_id: str,
@@ -289,6 +321,8 @@ def build_camera_payload(
     fps: float,
     cpu_usage: float,
     memory_usage: float,
+    annotated_image_url: str | None = None,
+    detections: Sequence[Detection] | None = None,
 ) -> DetectionUploadRequest:
     return DetectionUploadRequest(
         idempotencyKey=f"{inspection_id}:{frame_id}",
@@ -300,10 +334,10 @@ def build_camera_payload(
         isKeyFrame=True,
         uploadReason=UPLOAD_REASON,
         imageUrl=image_url,
-        annotatedImageUrl=None,
+        annotatedImageUrl=annotated_image_url,
         imageWidth=image_width,
         imageHeight=image_height,
-        detections=[],
+        detections=list(detections or []),
         performance=Performance(
             latencyMs=round(latency_ms, 2),
             fps=round(fps, 2),
@@ -446,13 +480,31 @@ def terminate_process(process: subprocess.Popen[bytes]) -> None:
 
 
 def prune_raw_frames(*, uploads_dir: Path, inspection_id: str, keep_count: int) -> list[Path]:
+    return prune_upload_frames(
+        uploads_dir=uploads_dir,
+        inspection_id=inspection_id,
+        keep_count=keep_count,
+        kind="raw",
+    )
+
+
+def prune_annotated_frames(*, uploads_dir: Path, inspection_id: str, keep_count: int) -> list[Path]:
+    return prune_upload_frames(
+        uploads_dir=uploads_dir,
+        inspection_id=inspection_id,
+        keep_count=keep_count,
+        kind="annotated",
+    )
+
+
+def prune_upload_frames(*, uploads_dir: Path, inspection_id: str, keep_count: int, kind: str) -> list[Path]:
     if keep_count <= 0:
         return []
-    raw_dir = uploads_dir / "raw" / inspection_id
-    if not raw_dir.exists():
+    frame_dir = uploads_dir / kind / inspection_id
+    if not frame_dir.exists():
         return []
     frames = sorted(
-        (path for path in raw_dir.glob("frame-*.jpg") if path.is_file()),
+        (path for path in frame_dir.glob("frame-*.jpg") if path.is_file()),
         key=lambda path: (path.stat().st_mtime_ns, path.name),
     )
     excess_count = len(frames) - keep_count

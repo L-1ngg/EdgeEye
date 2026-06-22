@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     camera_device_id: str = Field(default="device-001", min_length=1)
     camera_operator: str = Field(default="backend-camera", min_length=1)
     camera_outbox_dir: str = Field(default="data/camera-outbox", min_length=1)
+    edge_model_enabled: bool = True
+    edge_model_python: str = Field(default="python3", min_length=1)
+    edge_model_script: str = Field(default="model-deploy/edge_acl_om_bridge.py", min_length=1)
+    edge_model_path: str = Field(
+        default="models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om",
+        min_length=1,
+    )
+    edge_model_classes_path: str = Field(default="model-deploy/classes-edgeeye-insulator-v1.json", min_length=1)
+    edge_model_preprocess_path: str = Field(default="model-deploy/preprocess-edgeeye-insulator-v1.json", min_length=1)
+    edge_model_output_shape: str = Field(default="1,6,8400", min_length=1)
+    edge_model_device_id: int = Field(default=0, ge=0)
+    edge_model_timeout_seconds: float = Field(default=15.0, gt=0)
+    edge_model_annotated_enabled: bool = True
     llm_provider: str = "rule-template"
     llm_api_url: str | None = None
     llm_api_key: str | None = None

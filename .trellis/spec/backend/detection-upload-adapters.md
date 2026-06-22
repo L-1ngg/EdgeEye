@@ -119,6 +119,106 @@ This invents a fault from a device-only model class.
 This preserves the current model's actual capability and lets the backend store
 device detections without creating false fault events.
 
+## Scenario: Atlas ACL / OM Bridge Adapter
+
+### 1. Scope / Trigger
+
+- Trigger: a backend-owned or operator-run subprocess executes an Atlas OM
+  model and emits detection JSON for a single image.
+- Applies to `model-deploy/edge_acl_om_bridge.py` and the backend wrapper in
+  `backend/app/services/edge_model.py`.
+
+### 2. Signatures
+
+- One-frame command:
+
+```bash
+python3 model-deploy/edge_acl_om_bridge.py \
+  --model models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om \
+  --image /absolute/path/to/frame.jpg \
+  --classes model-deploy/classes-edgeeye-insulator-v1.json \
+  --preprocess model-deploy/preprocess-edgeeye-insulator-v1.json \
+  --annotated-output /absolute/path/to/annotated.jpg \
+  --output-shape 1,6,8400
+```
+
+- Backend wrapper call:
+  `edge_model_service.infer_frame(image_path: Path, annotated_path: Path | None)`.
+
+### 3. Contracts
+
+- The bridge stdout must end with one JSON object containing:
+  `detections`, `imageWidth`, `imageHeight`, `latencyMs`, `fps`, `modelPath`,
+  and `annotatedImagePath`.
+- `detections` items must match backend `Detection` fields exactly:
+  `category`, `deviceType`, `faultType`, `confidence`, and original-pixel
+  `bbox`.
+- The ACL bridge may write CANN/OpenCV diagnostics to stderr; backend parsing
+  must parse stdout JSON only and must accept the JSON as the final non-empty
+  stdout line.
+- The backend must pass absolute image and annotated paths to the bridge. A
+  relative `uploads/...` path is ambiguous because backend runs from
+  `backend/` while the subprocess cwd is the repository root.
+- `EDGE_MODEL_PYTHON` must point to a Python that can import `cv2`, `numpy`, and
+  `acl`. On the current board, plain `python3` under `uv run` resolves to
+  `backend/.venv/bin/python3`, which is not suitable for ACL inference.
+
+### 4. Validation & Error Matrix
+
+- Missing OM/classes/preprocess/script/image -> backend logs once and returns
+  no model result for that sampled frame.
+- Non-zero bridge exit, timeout, invalid JSON, missing output fields, or
+  invalid `Detection` values -> backend logs once and returns no model result.
+- Annotated output requested but not created -> backend logs once and uploads
+  the sampled frame without model detections.
+- Output tensor byte size differs from `output-shape * float32` -> bridge exits
+  non-zero before emitting detections.
+- Empty detections are valid when the scene has no target above threshold.
+
+### 5. Good/Base/Bad Cases
+
+- Good: bridge reuses the ONNX adapter's preprocessing, YOLO postprocess, NMS,
+  coordinate mapping, and class mapping so ONNX and OM paths cannot drift.
+- Base: a live camera sample with no insulator target emits `detections: []`
+  but still writes raw/annotated evidence and performance metadata.
+- Bad: importing pyACL in backend modules at import time or parsing stderr as
+  model output.
+
+### 6. Tests Required
+
+- `python3 -m py_compile model-deploy/edge_acl_om_bridge.py`.
+- Backend unit test that monkeypatches `subprocess.run` and validates bridge
+  JSON is converted into backend `Detection` objects.
+- Backend unit test that missing model resources degrade to `None` instead of
+  raising through the camera loop.
+- Board smoke with a real OM and sample JPEG; record output shape, image size,
+  latency, and whether detections are expected for the scene.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+command = ["python3", "model-deploy/edge_acl_om_bridge.py", "--image", "uploads/raw/.../frame.jpg"]
+```
+
+Under `uv run`, this can call the backend venv Python without `cv2/numpy`, and
+the relative image path points at the wrong directory.
+
+#### Correct
+
+```python
+command = [
+    resolve_python_executable(settings.edge_model_python),
+    str(resolve_project_path(settings.edge_model_script)),
+    "--image",
+    str(image_path.resolve()),
+]
+```
+
+The bridge uses the board runtime Python and receives an unambiguous image
+path.
+
 ## Scenario: Local Smoke Baseline Artifacts
 
 ### 1. Scope / Trigger
