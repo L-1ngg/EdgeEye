@@ -286,6 +286,17 @@ Atlas 部署记录里必须保留：
 
 模型交付还必须提供一份 `expected-output-v1.json`，至少包含 5 张测试图的期望 `category`、`bbox`、`confidence` 范围和类别映射结果，用于成员1在 Atlas 转换后做一致性验证。
 
+当候选模型尚未提升为默认 `detector-v1` 时，部署侧元数据使用带模型名的文件，避免覆盖当前 smoke 基线，例如：
+
+```text
+model-deploy/classes-edgeeye-insulator-v1.json
+model-deploy/label-edgeeye-insulator-v1.names
+model-deploy/preprocess-edgeeye-insulator-v1.json
+model-deploy/expected-output-edgeeye-insulator-v1.json
+```
+
+训练评估、数据划分和来源审计报告保留在 `dataset/docs/`；`model-deploy/` 只放板端转换和输出对比需要的小型元数据。
+
 ### 当前 ONNX 调试桥
 
 `model-deploy/edge_onnx_bridge.py` 是开发机和早期联调用的 ONNX 调试桥，职责是验证模型调用链路和后端 payload 形状：

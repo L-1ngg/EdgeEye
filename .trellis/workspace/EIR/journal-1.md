@@ -22,3 +22,17 @@
 - Next handoff risk: training teammate must provide final class order,
   preprocess/postprocess parameters, test samples, and fault-class mappings
   before Atlas OM/ACL deployment can represent real fault events.
+
+## 2026-06-22 - Remote training handoff review
+
+- Aborted the interrupted rebase, backed up the local handoff commit as
+  `backup/insulator-handoff-ff912dc`, then reset `main` to `origin/main` so the
+  review used the latest remote training work.
+- Remote already contains the training workflow, archived training Trellis
+  tasks, and the authoritative insulator domain-r1 report under `dataset/docs/`.
+  Avoided duplicating that report under `docs/`.
+- Local ignored artifacts contain the insulator domain-r1 ONNX/PT/delivery tar;
+  ONNX/PT hashes match the remote report. The useful remaining EIR work is
+  Atlas-side ATC/OM/ACL handoff metadata and documentation.
+- Added `model-deploy/*edgeeye-insulator-v1*` metadata and documented the next
+  ATC command, but did not run ATC or inference pending user confirmation.

@@ -58,7 +58,7 @@
 | NPU 设备节点 | `/dev/davinci0`、`/dev/davinci_manager` |
 | pyACL 状态 | `acl.init()`、`acl.rt.get_device_count()`、`acl.rt.set_device(0)` 均可成功 |
 
-当前镜像中未发现可直接用于本项目的 `.om` 目标检测模型文件。成员2仍需提供 ONNX/OM 模型、`classes.json`、`label.names`、输入尺寸和阈值参数。
+当前镜像中未发现可直接用于本项目的 `.om` 目标检测模型文件。仓库本地 artifacts 中已有 ONNX 候选模型，下一步需要在当前 Atlas 310B4 环境用 `atc` 转换为 `.om`，再通过 ACL 路线验证输出一致性。
 
 ## 当前模型接入壳子
 
@@ -77,6 +77,52 @@
 | `model-deploy/preprocess-v1.json` | 输入尺寸、颜色通道、归一化、置信度阈值和 NMS 阈值 |
 | `model-deploy/expected-output-v1.json` | 5 张本地测试图的 ONNX smoke 基准，用于后续 OM/ACL 输出对比 |
 | `model-deploy/artifacts/transformer-v1-test-images/` | 本地 5 张测试图、标注图和 payload 输出，Git 忽略 |
+
+2026-06-22 成员2追加了绝缘子两类 `domain-r1` 候选模型。训练链路、验证指标和来源审计已记录在
+[`dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`](../dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)，Atlas 侧只记录部署接力所需文件：
+
+| 文件 | 用途 |
+| --- | --- |
+| `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx` | 绝缘子候选 ONNX 模型，本地大文件被 `.gitignore` 忽略 |
+| `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.pt` | 训练权重，本地大文件被 `.gitignore` 忽略 |
+| `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw-delivery.tar.gz` | 成员2交付包，内含 ONNX/PT/类别/预处理/期望输出/报告副本 |
+| `model-deploy/classes-edgeeye-insulator-v1.json` | `insulator_normal` / `insulator_surface_damage` 到后端契约的显式映射 |
+| `model-deploy/label-edgeeye-insulator-v1.names` | 两类标签顺序文件 |
+| `model-deploy/preprocess-edgeeye-insulator-v1.json` | 输入尺寸、颜色通道、归一化、置信度阈值和 NMS 阈值 |
+| `model-deploy/expected-output-edgeeye-insulator-v1.json` | 5 张测试图的 ONNX 期望输出，用于后续 OM/ACL 对比 |
+
+该候选模型类别映射如下：
+
+```json
+[
+  {
+    "category": "insulator_normal",
+    "deviceType": "insulator",
+    "faultType": null
+  },
+  {
+    "category": "insulator_surface_damage",
+    "deviceType": "insulator",
+    "faultType": "surface_damage"
+  }
+]
+```
+
+当前 310B4 板端转换命令草案：
+
+```bash
+HOME=/tmp atc \
+  --model=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx \
+  --framework=5 \
+  --output=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw \
+  --input_format=NCHW \
+  --input_shape="images:1,3,640,640" \
+  --soc_version=Ascend310B4 \
+  --output_type=FP32 \
+  --log=info
+```
+
+说明：`--output` 不带 `.om` 后缀，`atc` 会生成同名前缀的 `.om` 文件。当前 ONNX 输入节点名为 `images`，输出节点名为 `output0`，输出 shape 为 `[1,6,8400]`。ATC 转换、OM 信息检查和 Atlas ACL 推理尚未执行，需要用户确认后再开始。
 
 当前模型只输出一类：
 

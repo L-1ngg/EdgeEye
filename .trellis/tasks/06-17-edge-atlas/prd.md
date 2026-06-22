@@ -56,6 +56,10 @@
 - 2026-06-22 已将用户临时放在根目录 `images/` 的 5 张测试图迁移到本地 ignored artifact 目录 `model-deploy/artifacts/transformer-v1-test-images/raw/`，并重命名为 `transformer-v1-001.jpg` 到 `transformer-v1-005.jpg`。
 - 2026-06-22 已基于 5 张测试图生成本地 ONNX smoke 输出：`model-deploy/artifacts/transformer-v1-test-images/payloads/` 和 `annotated/`；所有 payload 均通过后端 `DetectionUploadRequest` 校验。
 - 2026-06-22 已新增 `model-deploy/expected-output-v1.json`，记录 5 张图的 ONNX 基准输出，用于后续 ATC 转 OM 和 Atlas ACL 推理结果对比。
+- 2026-06-22 远程已补齐训练链路和报告：`training/` 包含数据准备、训练、ONNX 导出、期望输出生成和候选分析脚本；`dataset/docs/edgeeye-insulator-v1-domain-r1-report.md` 是绝缘子 domain-r1 候选权威报告。
+- 2026-06-22 绝缘子 domain-r1 候选本地 artifacts 已存在：ONNX/PT/delivery tar 位于 `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw*`，大文件均被 Git 忽略；ONNX/PT SHA-256 与远程报告一致。
+- 2026-06-22 已补充 Atlas 侧小型部署元数据：`model-deploy/classes-edgeeye-insulator-v1.json`、`label-edgeeye-insulator-v1.names`、`preprocess-edgeeye-insulator-v1.json`、`expected-output-edgeeye-insulator-v1.json`。
+- 绝缘子 domain-r1 候选是两类 YOLOv8 detect 模型：输入 `images [1,3,640,640]`，输出 `output0 [1,6,8400]`，类别为 `insulator_normal` 和 `insulator_surface_damage`，推荐阈值 `conf=0.25`、`iou=0.45`。
 
 ## Requirements
 
@@ -123,6 +127,9 @@
 - [x] 当前 ONNX 推理结果能转换为 EdgeEye `Detection` 结构，bbox 坐标基于原图尺寸且通过后端请求模型边界校验。
 - [x] 成员2当前测试版模型元数据已记录：单类 `transformer`、YOLOv8 detect、输入 `640x640`、`conf=0.25`、`iou=0.45`。
 - [x] 5 张本地测试图已整理到 ignored artifact 目录并生成 ONNX smoke payload、标注图和 `expected-output-v1.json` 基准。
+- [x] 成员2绝缘子 domain-r1 候选已记录到 Atlas 接入文档和 `model-deploy` 元数据，训练报告保留在 `dataset/docs/`，未重复搬运。
+- [ ] 绝缘子 domain-r1 候选完成 `ONNX -> OM` ATC 转换，并记录生成的 `.om` 路径与模型信息。
+- [ ] 绝缘子 domain-r1 候选完成 Atlas ACL 推理 smoke，并与 `model-deploy/expected-output-edgeeye-insulator-v1.json` 对比。
 - [ ] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
 - [ ] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前 ONNX 调试桥已实现可选 POST，但尚未在运行中的后端服务上做端到端上传复测。
 - [ ] 后端不可用时上传任务进入本地 outbox，不导致推理主循环崩溃。
@@ -141,9 +148,9 @@
 
 ## Open Questions
 
-- 当前 ONNX 测试模型和阈值已确认；仍未发现可直接使用的项目级 `.om` 模型文件，ATC 转换和 Atlas ACL 推理尚未执行。
+- 当前 ONNX 测试模型和绝缘子候选模型阈值已确认；仍未发现可直接使用的项目级 `.om` 模型文件，ATC 转换和 Atlas ACL 推理尚未执行。
 - 后端联调地址是否已可从开发板访问尚未确认。
-- 成员2后续多类别大模型尚未交付，当前只能按单类 `transformer` 设备检测链路联调。
+- 成员2四类 `edgeeye-detector-v1` 和两类 `edgeeye-insulator-v1-domain-r1` 训练报告已交付；当前优先用绝缘子两类候选做破损演示评审，但它不自动替换四类基线。
 - 边缘端摄像头读取实现应优先修复 OpenCV `VideoCapture` 打开失败，还是直接采用已验证可用的 V4L2/ffmpeg/GStreamer 路径，尚待执行阶段决定。
 - ATC/OM/ACL 路线暂不执行；下一阶段可继续完善上传、后端可访问图片路径和后端端到端复测。
 

@@ -1,0 +1,162 @@
+{
+  "version": "edgeeye-insulator-v1",
+  "generatedAt": "2026-06-22T02:49:53+08:00",
+  "source": {
+    "weights": "models/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw/best.pt",
+    "dataset": "dataset/processed/edgeeye-insulator-v1-domain-r1/dataset.yaml",
+    "split": "test",
+    "imgsz": 640,
+    "confidenceThreshold": 0.25,
+    "nmsThreshold": 0.45,
+    "maxDetectionsPerImage": 10
+  },
+  "comparisonTolerance": {
+    "bboxPixels": 4,
+    "confidenceAbsolute": 0.05
+  },
+  "classes": [
+    {
+      "id": 0,
+      "name": "insulator_normal",
+      "type": "device",
+      "deviceType": "insulator",
+      "faultType": null
+    },
+    {
+      "id": 1,
+      "name": "insulator_surface_damage",
+      "type": "fault",
+      "deviceType": "insulator",
+      "faultType": "surface_damage"
+    }
+  ],
+  "cases": [
+    {
+      "image": "dataset/processed/edgeeye-insulator-v1-domain-r1/test/images/aerial_train_000000795d_211141889237.jpg",
+      "width": 640,
+      "height": 360,
+      "detections": [
+        {
+          "classId": 0,
+          "className": "insulator_normal",
+          "confidence": 0.905264,
+          "bbox": [295, 1, 371, 248],
+          "deviceType": "insulator",
+          "faultType": null
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.70348,
+          "bbox": [302, 135, 361, 156],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        }
+      ]
+    },
+    {
+      "image": "dataset/processed/edgeeye-insulator-v1-domain-r1/test/images/aerial_train_000000986_edec50bce082.jpg",
+      "width": 640,
+      "height": 360,
+      "detections": [
+        {
+          "classId": 0,
+          "className": "insulator_normal",
+          "confidence": 0.943261,
+          "bbox": [216, 103, 382, 358],
+          "deviceType": "insulator",
+          "faultType": null
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.769811,
+          "bbox": [282, 124, 359, 164],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        }
+      ]
+    },
+    {
+      "image": "dataset/processed/edgeeye-insulator-v1-domain-r1/test/images/aerial_train_000006140h_e92ad0b15e87.jpg",
+      "width": 640,
+      "height": 360,
+      "detections": [
+        {
+          "classId": 0,
+          "className": "insulator_normal",
+          "confidence": 0.918205,
+          "bbox": [296, 95, 409, 353],
+          "deviceType": "insulator",
+          "faultType": null
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.658777,
+          "bbox": [325, 194, 397, 216],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        }
+      ]
+    },
+    {
+      "image": "dataset/processed/edgeeye-insulator-v1-domain-r1/test/images/aerial_train_100009_96528868bf53.jpg",
+      "width": 640,
+      "height": 360,
+      "detections": [
+        {
+          "classId": 0,
+          "className": "insulator_normal",
+          "confidence": 0.926655,
+          "bbox": [304, 100, 390, 358],
+          "deviceType": "insulator",
+          "faultType": null
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.801221,
+          "bbox": [317, 121, 354, 147],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        }
+      ]
+    },
+    {
+      "image": "dataset/processed/edgeeye-insulator-v1-domain-r1/test/images/aerial_train_100020_36ecf7e32723.jpg",
+      "width": 640,
+      "height": 360,
+      "detections": [
+        {
+          "classId": 0,
+          "className": "insulator_normal",
+          "confidence": 0.91985,
+          "bbox": [263, 111, 339, 358],
+          "deviceType": "insulator",
+          "faultType": null
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.782357,
+          "bbox": [265, 123, 296, 145],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        },
+        {
+          "classId": 1,
+          "className": "insulator_surface_damage",
+          "confidence": 0.378374,
+          "bbox": [288, 240, 295, 250],
+          "deviceType": "insulator",
+          "faultType": "surface_damage"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Generated from development-machine Ultralytics inference.",
+    "Use tolerances for Atlas .om comparison because runtime kernels can shift confidence slightly."
+  ]
+}

@@ -241,8 +241,12 @@ reports/
 - `edgeeye-detector-v1`：四类基线，包含绝缘子正常/破损和变压器正常/破损。
 - `edgeeye-insulator-v1-opt30-yolov8s-adamw`：两类绝缘子优化候选，类别为
   `insulator_normal` 和 `insulator_surface_damage`。
+- `edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`：两类绝缘子 source-style controlled recall 候选，优先用于当前绝缘子破损演示评审。
 
 两类候选模型导出的 YOLOv8 ONNX 输出为 `output0 [1,6,8400]`，不能直接套用
-四类基线的 `[1,8,8400]` 后处理形状。优化结果和数据划分见
-[`dataset/docs/edgeeye-insulator-v1-optimization-report.md`](../dataset/docs/edgeeye-insulator-v1-optimization-report.md)。
-该候选模型是否替换四类基线，需要在 Atlas 转换和端到端联调前单独确认。
+四类基线的 `[1,8,8400]` 后处理形状。优化结果和数据划分见：
+
+- [`dataset/docs/edgeeye-insulator-v1-optimization-report.md`](../dataset/docs/edgeeye-insulator-v1-optimization-report.md)
+- [`dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`](../dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)
+
+`domain-r1` 候选在 `conf=0.25`、`iou=0.45` 下的损伤类召回率为 `0.77258`，高于前一版候选同阈值结果 `0.61562`，且损伤类精度为 `0.85113`。它适合先交给成员1做 ATC/OM/ACL 验证，但仍是绝缘子两类候选，不应自动替换四类 `edgeeye-detector-v1` 基线。

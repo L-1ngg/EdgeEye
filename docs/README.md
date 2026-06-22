@@ -107,4 +107,5 @@ Atlas 开发板使用 ACL 加载 OM 推理
 - [API 端点规范](./api-spec.md)
 - [OpenAPI 机器可校验规范](./openapi.yaml)
 - [工程规范与联调标准](./engineering-standards.md)
+- [数据集与模型报告](../dataset/docs/sources.md)
 - [文档审查结论](./review-notes.md)

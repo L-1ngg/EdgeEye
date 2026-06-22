@@ -1,0 +1,19 @@
+{
+  "version": "edgeeye-insulator-v1",
+  "classes": [
+    {
+      "id": 0,
+      "name": "insulator_normal",
+      "type": "device",
+      "deviceType": "insulator",
+      "faultType": null
+    },
+    {
+      "id": 1,
+      "name": "insulator_surface_damage",
+      "type": "fault",
+      "deviceType": "insulator",
+      "faultType": "surface_damage"
+    }
+  ]
+}

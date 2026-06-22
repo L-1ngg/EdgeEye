@@ -41,3 +41,62 @@ backend/.venv/bin/python -c "import json, sys; sys.path.insert(0, 'backend'); fr
 Use `model-deploy/expected-output-v1.json` as the ONNX baseline when comparing
 future Atlas OM/ACL output. The future comparison should focus on output shape,
 class mapping, coordinate range, and payload validity before model accuracy.
+
+## EdgeEye Insulator V1 Domain-R1 Candidate
+
+The stronger insulator-only candidate is delivered as local ignored artifacts:
+
+- delivery package:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw-delivery.tar.gz`
+- ONNX for ATC:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx`
+- PT checkpoint:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.pt`
+- training and validation report:
+  `dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`
+
+Tracked deploy metadata for the candidate lives in this directory:
+
+- `classes-edgeeye-insulator-v1.json`
+- `label-edgeeye-insulator-v1.names`
+- `preprocess-edgeeye-insulator-v1.json`
+- `expected-output-edgeeye-insulator-v1.json`
+
+Candidate contract:
+
+- model type: YOLOv8 detect
+- classes: `0: insulator_normal`, `1: insulator_surface_damage`
+- input: `images [1,3,640,640]`
+- output: `output0 [1,6,8400]`
+- confidence threshold: `0.25`
+- NMS IoU threshold: `0.45`
+
+Convert the ONNX model to an Atlas OM model for the current 310B4 board:
+
+```bash
+HOME=/tmp atc \
+  --model=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx \
+  --framework=5 \
+  --output=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw \
+  --input_format=NCHW \
+  --input_shape="images:1,3,640,640" \
+  --soc_version=Ascend310B4 \
+  --output_type=FP32 \
+  --log=info
+```
+
+The `--output` value omits the suffix; ATC writes
+`models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`.
+If the target board changes, replace `--soc_version` with the value confirmed
+from `npu-smi info`.
+
+Inspect the converted OM metadata:
+
+```bash
+atc --mode=6 \
+  --om=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om
+```
+
+After OM/ACL inference is available, compare its class mapping, bbox range, and
+confidence values against `expected-output-edgeeye-insulator-v1.json`. Use the
+fixture tolerances instead of exact floating-point equality.

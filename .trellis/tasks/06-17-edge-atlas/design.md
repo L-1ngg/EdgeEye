@@ -111,6 +111,12 @@ Model classes from `classes.json` must map to EdgeEye enums:
 
 The mapper should reject invalid bbox values and clamp only when the reason is explicit coordinate rounding. Structural output errors should be logged.
 
+The insulator domain-r1 candidate is a two-class YOLOv8 detect model. Its
+Atlas path must use the two-class output contract `output0 [1,6,8400]`, not the
+four-class detector-v1 shape `output0 [1,8,8400]`. The deploy metadata lives in
+`model-deploy/*edgeeye-insulator-v1*`, while the training report remains in
+`dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`.
+
 ## Key-Frame Strategy
 
 Minimum behavior:
@@ -150,5 +156,9 @@ The local health surface can be an HTTP endpoint or CLI status command. It shoul
 - The browser gets realtime behavior through `GET /api/camera/stream.mjpg`; latest-result polling is metadata-only and does not need to match the sample/evidence interval.
 - Do not continuously record MP4 by default. Use raw/annotated keyframes for detection evidence and reports; result videos are a later optional offline artifact.
 - ACL/OM runner should be isolated behind an interface so the rest of the pipeline can be tested off-board.
+- The next model milestone should convert
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx`
+  with ATC on the 310B4 board, inspect the generated OM, then compare ACL
+  output with `model-deploy/expected-output-edgeeye-insulator-v1.json`.
 - Real secrets must not be committed. Local endpoints and credentials belong in local config, not default config.
 - Rollback is simple at Phase 2 granularity: keep debug runner and sample video path working while adding Atlas-specific code.

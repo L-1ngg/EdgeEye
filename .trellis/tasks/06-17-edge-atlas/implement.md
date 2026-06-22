@@ -6,8 +6,10 @@
 - [x] Re-check USB camera after repository update: `/dev/video0` is present and V4L2 can capture MJPG `640x480` test frame.
 - [x] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
 - [x] Record current test model metadata from teammate: YOLOv8 detect, one class `0: transformer`, input `640x640`, `conf=0.25`, `iou=0.45`; ATC/OM/ACL remains pending.
+- [x] Record current insulator domain-r1 candidate metadata from teammate: YOLOv8 detect, two classes `insulator_normal` and `insulator_surface_damage`, input `640x640`, `conf=0.25`, `iou=0.45`; ATC/OM/ACL remains pending.
 - [ ] Ask user to confirm backend base URL reachable from board.
 - [x] Record current temporary ONNX asset path and model limits: `models/artifacts/detector-transformer-v1.onnx` is a one-class `transformer` detect model and remains a local ignored artifact.
+- [x] Record current insulator ONNX/PT artifact paths and hashes: `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx` and `.pt` are local ignored artifacts and match `dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`.
 
 ## Phase 1: Repository Inspection Before Code
 
@@ -52,6 +54,15 @@
 - [ ] Implement YOLO output decoding, confidence filter, coordinate scaling, NMS, and class mapping.
 - [x] Validate local ONNX debug bridge output against backend `DetectionUploadRequest`.
 - [x] Validate the 5 local teammate-provided test images through the ONNX debug bridge; generated payloads all pass backend request model validation.
+- [x] Add tracked insulator candidate deploy metadata:
+  `classes-edgeeye-insulator-v1.json`,
+  `label-edgeeye-insulator-v1.names`,
+  `preprocess-edgeeye-insulator-v1.json`, and
+  `expected-output-edgeeye-insulator-v1.json`.
+- [x] Validate insulator candidate JSON metadata and label/class order.
+- [ ] Convert the insulator candidate ONNX to OM with ATC after user confirmation.
+- [ ] Inspect the generated OM model info.
+- [ ] Compare OM/ACL output with `model-deploy/expected-output-edgeeye-insulator-v1.json`.
 - [ ] Validate bbox and enum output inside the final edge process before upload.
 
 ## Phase 5: Key Frames, Annotation, Upload
@@ -172,6 +183,50 @@ Results:
 - Baseline summary: `transformer-v1-001` produced one `transformer` detection at confidence `0.3071`; `transformer-v1-004` produced one `transformer` detection at confidence `0.5046`; the other 3 samples produced empty `detections`, which is valid for this smoke baseline.
 - Backend pytest passed: `19 passed, 1 warning`.
 - ATC conversion, OM generation, Atlas ACL loading, and backend direct upload were intentionally not run in this step.
+
+Commands run for the 2026-06-22 remote training handoff review:
+
+```bash
+git fetch origin main
+git reset --hard origin/main
+tar -tzf models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw-delivery.tar.gz
+sha256sum \
+  models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx \
+  models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.pt
+python3 -m json.tool model-deploy/classes-edgeeye-insulator-v1.json
+python3 -m json.tool model-deploy/preprocess-edgeeye-insulator-v1.json
+python3 -m json.tool model-deploy/expected-output-edgeeye-insulator-v1.json
+```
+
+Results:
+
+- Remote already contains the training workflow under `training/` and the
+  authoritative insulator domain-r1 report under `dataset/docs/`.
+- Delivery package contains `best.onnx`, `best.pt`, `classes.json`,
+  `label.names`, `preprocess-v1.json`, `expected-output-v1.json`, and a copy of
+  `dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`.
+- Local ONNX/PT hashes match the remote report:
+  ONNX `5d9ad03c7357a3adf0c99bc31edb25d6f6fb0297f3209dc8cbc5cfdf72b71721`,
+  PT `fc09697056625f0bde42f5a32a8d06543ea8031aa0b7bf2450a5d5b744a11fa8`.
+- Candidate mapping is contract-valid:
+  `insulator_normal -> deviceType: insulator, faultType: null` and
+  `insulator_surface_damage -> deviceType: insulator, faultType: surface_damage`.
+- ATC conversion, OM generation, Atlas ACL loading, and backend direct upload
+  were intentionally not run; user confirmation is required before starting.
+
+Next ATC command draft for the current 310B4 board:
+
+```bash
+HOME=/tmp atc \
+  --model=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx \
+  --framework=5 \
+  --output=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw \
+  --input_format=NCHW \
+  --input_shape="images:1,3,640,640" \
+  --soc_version=Ascend310B4 \
+  --output_type=FP32 \
+  --log=info
+```
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
 
