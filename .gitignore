@@ -45,6 +45,7 @@ model-deploy/artifacts/*
 training/runs/
 training/weights/
 runs/
+fusion_result.json
 *.pt
 *.onnx
 *.om

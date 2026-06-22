@@ -100,3 +100,20 @@ atc --mode=6 \
 After OM/ACL inference is available, compare its class mapping, bbox range, and
 confidence values against `expected-output-edgeeye-insulator-v1.json`. Use the
 fixture tolerances instead of exact floating-point equality.
+
+Current board result from 2026-06-22:
+
+- ATC conversion succeeded on `Ascend310B4`.
+- OM path:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`
+- OM SHA-256:
+  `649934ee37b723e670773e551e169407b4057173117fc178813ea84998022d0c`
+- `atc --mode=6` reports `atc_version=7.0.0.5.242`,
+  `memory_size=24779264 B`, and `weight_size=22340096 B`.
+- Minimal pyACL execution smoke passed with one zero tensor:
+  input `images [1,3,640,640]`, output `[1,6,8400]`, output buffer
+  `201600` bytes, single execute about `26.659 ms`.
+
+The expected-output fixture images are under ignored `dataset/processed/...`
+paths and are not present in the current checkout, so case-by-case numerical
+comparison remains pending.

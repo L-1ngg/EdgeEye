@@ -36,3 +36,20 @@
   Atlas-side ATC/OM/ACL handoff metadata and documentation.
 - Added `model-deploy/*edgeeye-insulator-v1*` metadata and documented the next
   ATC command, but did not run ATC or inference pending user confirmation.
+
+## 2026-06-22 - Insulator OM conversion smoke
+
+- Ran ATC for the insulator domain-r1 ONNX on the 310B4 board. The first
+  sandboxed attempt failed on system/device permissions; rerunning outside the
+  sandbox succeeded.
+- Generated ignored OM artifact:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`
+  with SHA-256
+  `649934ee37b723e670773e551e169407b4057173117fc178813ea84998022d0c`.
+- `atc --mode=6` confirmed `soc_version=Ascend310B4`, toolkit
+  `7.0.0.5.242`, memory size `24779264 B`, and weight size `22340096 B`.
+- Minimal pyACL smoke loaded the OM and executed one zero input: input
+  `images [1,3,640,640]`, output `[1,6,8400]`, about `26.659 ms`.
+- Remaining model validation gap: expected-output fixture images live under
+  ignored `dataset/processed/...` paths and are absent, so numerical output
+  comparison is still pending.

@@ -58,7 +58,10 @@
 | NPU 设备节点 | `/dev/davinci0`、`/dev/davinci_manager` |
 | pyACL 状态 | `acl.init()`、`acl.rt.get_device_count()`、`acl.rt.set_device(0)` 均可成功 |
 
-当前镜像中未发现可直接用于本项目的 `.om` 目标检测模型文件。仓库本地 artifacts 中已有 ONNX 候选模型，下一步需要在当前 Atlas 310B4 环境用 `atc` 转换为 `.om`，再通过 ACL 路线验证输出一致性。
+当前镜像中已生成绝缘子候选 `.om` 模型，路径为
+`models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`。
+该文件是本地 artifact，被 `.gitignore` 忽略，不进入 Git。下一步是把 OM
+推理接入边缘端实时链路，并在拿到 expected-output 对应测试图片后做逐图输出对比。
 
 ## 当前模型接入壳子
 
@@ -84,6 +87,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx` | 绝缘子候选 ONNX 模型，本地大文件被 `.gitignore` 忽略 |
+| `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om` | 已由当前 310B4 板端 ATC 转换生成的 OM 模型，本地大文件被 `.gitignore` 忽略 |
 | `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.pt` | 训练权重，本地大文件被 `.gitignore` 忽略 |
 | `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw-delivery.tar.gz` | 成员2交付包，内含 ONNX/PT/类别/预处理/期望输出/报告副本 |
 | `model-deploy/classes-edgeeye-insulator-v1.json` | `insulator_normal` / `insulator_surface_damage` 到后端契约的显式映射 |
@@ -122,7 +126,18 @@ HOME=/tmp atc \
   --log=info
 ```
 
-说明：`--output` 不带 `.om` 后缀，`atc` 会生成同名前缀的 `.om` 文件。当前 ONNX 输入节点名为 `images`，输出节点名为 `output0`，输出 shape 为 `[1,6,8400]`。ATC 转换、OM 信息检查和 Atlas ACL 推理尚未执行，需要用户确认后再开始。
+说明：`--output` 不带 `.om` 后缀，`atc` 会生成同名前缀的 `.om` 文件。当前 ONNX 输入节点名为 `images`，输出节点名为 `output0`，输出 shape 为 `[1,6,8400]`。
+
+2026-06-22 实测结果：
+
+- ATC 转换成功，生成 OM SHA-256：
+  `649934ee37b723e670773e551e169407b4057173117fc178813ea84998022d0c`。
+- OM 元信息：`atc_version=7.0.0.5.242`，`soc_version=Ascend310B4`，
+  `memory_size=24779264 B`，`weight_size=22340096 B`。
+- pyACL 最小执行 smoke 通过：输入 `images [1,3,640,640]`，输出
+  `[1,6,8400]`，全零输入单次 `acl.mdl.execute` 约 `26.659 ms`。
+- 当前本机没有 `model-deploy/expected-output-edgeeye-insulator-v1.json`
+  中记录的 `dataset/processed/...` 测试图片，因此尚未做逐图输出数值对比。
 
 当前模型只输出一类：
 

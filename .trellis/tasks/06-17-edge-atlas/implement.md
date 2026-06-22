@@ -6,7 +6,7 @@
 - [x] Re-check USB camera after repository update: `/dev/video0` is present and V4L2 can capture MJPG `640x480` test frame.
 - [x] Resolve or route around current OpenCV `VideoCapture('/dev/video0', cv2.CAP_V4L2)` open failure before relying on OpenCV for continuous capture.
 - [x] Record current test model metadata from teammate: YOLOv8 detect, one class `0: transformer`, input `640x640`, `conf=0.25`, `iou=0.45`; ATC/OM/ACL remains pending.
-- [x] Record current insulator domain-r1 candidate metadata from teammate: YOLOv8 detect, two classes `insulator_normal` and `insulator_surface_damage`, input `640x640`, `conf=0.25`, `iou=0.45`; ATC/OM/ACL remains pending.
+- [x] Record current insulator domain-r1 candidate metadata from teammate: YOLOv8 detect, two classes `insulator_normal` and `insulator_surface_damage`, input `640x640`, `conf=0.25`, `iou=0.45`.
 - [ ] Ask user to confirm backend base URL reachable from board.
 - [x] Record current temporary ONNX asset path and model limits: `models/artifacts/detector-transformer-v1.onnx` is a one-class `transformer` detect model and remains a local ignored artifact.
 - [x] Record current insulator ONNX/PT artifact paths and hashes: `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx` and `.pt` are local ignored artifacts and match `dataset/docs/edgeeye-insulator-v1-domain-r1-report.md`.
@@ -60,9 +60,10 @@
   `preprocess-edgeeye-insulator-v1.json`, and
   `expected-output-edgeeye-insulator-v1.json`.
 - [x] Validate insulator candidate JSON metadata and label/class order.
-- [ ] Convert the insulator candidate ONNX to OM with ATC after user confirmation.
-- [ ] Inspect the generated OM model info.
-- [ ] Compare OM/ACL output with `model-deploy/expected-output-edgeeye-insulator-v1.json`.
+- [x] Convert the insulator candidate ONNX to OM with ATC after user confirmation.
+- [x] Inspect the generated OM model info.
+- [x] Run minimal pyACL execution smoke and confirm output shape `[1,6,8400]`.
+- [ ] Compare OM/ACL output with `model-deploy/expected-output-edgeeye-insulator-v1.json`; blocked until the ignored `dataset/processed/...` fixture images are available locally.
 - [ ] Validate bbox and enum output inside the final edge process before upload.
 
 ## Phase 5: Key Frames, Annotation, Upload
@@ -212,7 +213,8 @@ Results:
   `insulator_normal -> deviceType: insulator, faultType: null` and
   `insulator_surface_damage -> deviceType: insulator, faultType: surface_damage`.
 - ATC conversion, OM generation, Atlas ACL loading, and backend direct upload
-  were intentionally not run; user confirmation is required before starting.
+  were intentionally not run in this review step; user confirmation is required
+  before starting.
 
 Next ATC command draft for the current 310B4 board:
 
@@ -229,6 +231,41 @@ HOME=/tmp atc \
 ```
 
 Board-side validation commands will be provided to the user step by step and adjusted from real outputs.
+
+Commands run for the 2026-06-22 ATC/ACL smoke:
+
+```bash
+HOME=/tmp atc \
+  --model=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.onnx \
+  --framework=5 \
+  --output=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw \
+  --input_format=NCHW \
+  --input_shape="images:1,3,640,640" \
+  --soc_version=Ascend310B4 \
+  --output_type=FP32 \
+  --log=info
+atc --mode=6 \
+  --om=models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om
+sha256sum models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om
+```
+
+Results:
+
+- First sandboxed ATC attempt failed with `PermissionError: Operation not
+  permitted`; rerunning outside the sandbox succeeded.
+- Generated OM:
+  `models/artifacts/edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw.om`.
+- OM SHA-256:
+  `649934ee37b723e670773e551e169407b4057173117fc178813ea84998022d0c`.
+- `atc --mode=6` reported `atc_version=7.0.0.5.242`,
+  `soc_version=Ascend310B4`, `memory_size=24779264 B`, and
+  `weight_size=22340096 B`.
+- Minimal pyACL smoke loaded the OM, allocated input/output buffers, executed
+  one all-zero input, and produced output shape `[1,6,8400]` in about
+  `26.659 ms`.
+- Case-by-case comparison with `expected-output-edgeeye-insulator-v1.json` is
+  still pending because the referenced `dataset/processed/...` fixture images
+  are ignored and absent from this checkout.
 
 ## Review Gates
 
