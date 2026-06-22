@@ -54,6 +54,8 @@ class CameraBridgeService:
         self._latest_frame: StreamFrame | None = None
         self._stream_error: str | None = None
         self._process: subprocess.Popen[bytes] | None = None
+        self._sample_lock = threading.Lock()
+        self._sample_thread: threading.Thread | None = None
 
     def start(self) -> None:
         with self._lock:
@@ -81,11 +83,15 @@ class CameraBridgeService:
             self._thread = None
             self._stop_event.set()
             self._terminate_stream_process()
+        with self._sample_lock:
+            sample_thread = self._sample_thread
         with self._condition:
             self._condition.notify_all()
         if thread is None:
             return
         thread.join(timeout=3)
+        if sample_thread is not None:
+            sample_thread.join(timeout=3)
         logger.info("camera bridge stopped")
 
     def ensure_stream_available(self) -> None:
@@ -144,8 +150,8 @@ class CameraBridgeService:
                     measured_fps = fps_meter.tick(now)
                     self._publish_stream_frame(StreamFrame(sequence=stream_seq, content=content, captured_at=now))
                     if now - last_sample_at >= settings.camera_interval_seconds:
-                        last_sample_at = now
-                        if self._save_sample_frame(content, sample_seq, stats, measured_fps):
+                        if self._schedule_sample_frame(content, sample_seq, stats, measured_fps):
+                            last_sample_at = now
                             sample_seq += 1
                 if not self._stop_event.is_set():
                     raise CameraCaptureError(read_process_error(process) or "ffmpeg camera stream exited")
@@ -265,6 +271,19 @@ class CameraBridgeService:
                 save_outbox(Path(settings.camera_outbox_dir), payload, str(exc))
                 return True
             return False
+
+    def _schedule_sample_frame(self, content: bytes, frame_seq: int, stats: SystemStats, fps: float) -> bool:
+        with self._sample_lock:
+            if self._sample_thread is not None and self._sample_thread.is_alive():
+                return False
+            self._sample_thread = threading.Thread(
+                target=self._save_sample_frame,
+                args=(content, frame_seq, stats, fps),
+                name="edgeeye-camera-sample",
+                daemon=True,
+            )
+            self._sample_thread.start()
+            return True
 
     def _terminate_stream_process(self) -> None:
         process = self._process

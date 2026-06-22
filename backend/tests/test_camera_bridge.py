@@ -1,8 +1,11 @@
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.models.inspection import Detection, DetectionUploadRequest
 from app.services.camera_bridge import (
+    CameraBridgeService,
+    SystemStats,
     annotated_frame_path,
     annotated_frame_url,
     build_camera_payload,
@@ -132,3 +135,27 @@ def test_prune_raw_frames_keeps_newest_files(tmp_path: Path) -> None:
 
     assert [path.name for path in deleted] == ["frame-000001.jpg", "frame-000002.jpg"]
     assert sorted(path.name for path in raw_dir.glob("*.jpg")) == ["frame-000003.jpg", "frame-000004.jpg"]
+
+
+def test_sample_scheduler_skips_when_previous_sample_is_still_running() -> None:
+    service = CameraBridgeService()
+    started = threading.Event()
+    release = threading.Event()
+    calls: list[int] = []
+
+    def save_sample(content: bytes, frame_seq: int, stats: SystemStats, fps: float) -> bool:
+        calls.append(frame_seq)
+        started.set()
+        release.wait(timeout=2)
+        return True
+
+    service._save_sample_frame = save_sample  # type: ignore[method-assign]
+
+    assert service._schedule_sample_frame(b"first-frame", 1, SystemStats(), 15.0) is True
+    assert started.wait(timeout=1)
+    assert service._schedule_sample_frame(b"second-frame", 2, SystemStats(), 15.0) is False
+
+    release.set()
+    assert service._sample_thread is not None
+    service._sample_thread.join(timeout=1)
+    assert calls == [1]

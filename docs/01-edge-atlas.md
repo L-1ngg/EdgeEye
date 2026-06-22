@@ -144,6 +144,11 @@ HOME=/tmp atc \
   保存 `/uploads/annotated/{inspectionId}/{frameId}.jpg` 并通过原有
   `POST /api/detection/results` 写入 detections，失败时降级为空检测但不影响
   MJPEG 实时流。
+- 2026-06-22 可用性修复：MJPEG 实时流继续由单个 ffmpeg 长进程提供，低频
+  sample frame 的 raw/annotated 保存和 OM 推理改为后台线程执行；如果上一帧
+  sample 仍在推理，下一次采样会跳过，避免模型推理阻塞浏览器画面。前端侧栏
+  固定在视口内并支持收起，实时摄像头画面限制为中等宽度，避免主页面过长或画面
+  过大影响巡检面板使用。
 - 当前本机没有 `model-deploy/expected-output-edgeeye-insulator-v1.json`
   中记录的 `dataset/processed/...` 测试图片，因此尚未做逐图输出数值对比。
 

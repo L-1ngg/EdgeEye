@@ -66,6 +66,8 @@
 - 2026-06-22 由于 `uv run` 会把 `python3` 解析到 backend `.venv`，而该环境没有 `cv2/numpy`，后端模型服务会把默认 `python3` 优先解析到当前板端系统解释器 `/usr/local/miniconda3/bin/python3`；`.env.example` 也记录了该路径。
 - 2026-06-22 使用现有摄像头样本 `backend/uploads/raw/inspection-20260622-0007/frame-000058.jpg` 跑通 ACL/OM 单帧 smoke：输出图片尺寸 `640x480`，latency `26.294 ms`，由于画面中没有绝缘子目标，detections 为 `[]`。
 - 2026-06-22 启动后端后，最新巡检 `inspection-20260622-0010` 已持续生成 raw/annotated sampled frames；`latest-result` 返回 `annotatedImageUrl=/uploads/annotated/inspection-20260622-0010/frame-000014.jpg`、`imageWidth=640`、`imageHeight=480`、`performance.latencyMs=21.63`，当前摄像头画面 detections 仍为空。
+- 2026-06-22 已修复摄像头实时画面卡顿的主要实现风险：低频 sample frame 的保存、OM 推理和上传调度改为后台线程执行，MJPEG 读取循环不再同步等待模型推理；若上一帧 sample 尚未完成，下一次 sample 会跳过。
+- 2026-06-22 前端侧栏已改为桌面端固定视口高度并可收起，主工作区独立滚动；实时摄像头画面已限制最大展示宽度并降低最小高度，避免画面过大。
 
 ## Requirements
 
@@ -136,6 +138,8 @@
 - [x] 成员2绝缘子 domain-r1 候选已记录到 Atlas 接入文档和 `model-deploy` 元数据，训练报告保留在 `dataset/docs/`，未重复搬运。
 - [x] 绝缘子 domain-r1 候选完成 `ONNX -> OM` ATC 转换，并记录生成的 `.om` 路径与模型信息。
 - [x] 绝缘子 domain-r1 候选完成 Atlas ACL 最小执行 smoke，确认 OM 能加载和输出 `[1,6,8400]`。
+- [x] 摄像头 sample 推理不会阻塞 MJPEG 实时流；后台 sample 线程忙时跳过下一次 sample，并有回归测试覆盖。
+- [x] 前端侧栏在桌面端固定可见且支持收起，实时摄像头画面尺寸适合巡检面板使用。
 - [ ] 用 `model-deploy/expected-output-edgeeye-insulator-v1.json` 对应测试图片做 OM/ACL 逐图输出对比；当前 checkout 缺少 ignored `dataset/processed/...` 图片。
 - [x] 能保存原图和标注图，并生成后端可访问的 `imageUrl` 与 `annotatedImageUrl`。
 - [x] 能按 `POST /api/detection/results` 契约上传关键帧 JSON，后端返回 accepted 或 duplicate 时视为成功；当前后端内置摄像头桥已在运行中的后端服务上做端到端上传复测。

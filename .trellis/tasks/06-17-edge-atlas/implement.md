@@ -324,6 +324,28 @@ Results:
 - Frontend dev server is running at `http://192.168.137.2:5173/` and returned
   HTTP `200` for the root page.
 
+Commands run for the 2026-06-22 live camera usability hotfix:
+
+```bash
+cd backend && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python uv run pytest
+cd web && bun run build
+```
+
+Results:
+
+- Backend camera sample save / OM inference now runs in a single background
+  sample thread instead of synchronously inside the MJPEG read loop. If the
+  previous sample is still running, the next sample is skipped so realtime
+  streaming can continue.
+- Added regression coverage for the sample scheduler busy case in
+  `backend/tests/test_camera_bridge.py`.
+- Frontend shell now keeps the desktop sidebar fixed in the viewport with an
+  explicit collapse toggle; the workspace scrolls independently.
+- Realtime camera display is constrained to a medium-width stage with lower
+  minimum height so it no longer dominates the page.
+- Validation passed: backend pytest `24 passed, 1 warning`; frontend production
+  build passed.
+
 ## Review Gates
 
 - [ ] User confirms board facts and available model/backend inputs.

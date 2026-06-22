@@ -53,6 +53,7 @@ export function App() {
   const { theme, toggleTheme } = useTheme();
   const [isAuthenticated, setIsAuthenticated] = useState(() => hasDemoAdminSession());
   const [activeView, setActiveView] = useState<ViewKey>(() => getViewFromLocation());
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [appData, setAppData] = useState<AppData | null>(null);
   const [dataSources, setDataSources] = useState<Record<ViewKey, DataSource>>({
     dashboard: "unavailable",
@@ -292,28 +293,41 @@ export function App() {
   const activeDataSource = appData ? dataSources[activeView] : null;
 
   return (
-    <main className="app-shell">
+    <main className={isSidebarCollapsed ? "app-shell app-shell--sidebar-collapsed" : "app-shell"}>
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <Icon name="shield" size={20} />
-          </span>
-          <span className="brand-text">
-            <span>EdgeEye</span>
-            <strong>智能巡检平台</strong>
-          </span>
+        <div className="sidebar-main">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              <Icon name="shield" size={20} />
+            </span>
+            <span className="brand-text">
+              <span>EdgeEye</span>
+              <strong>智能巡检平台</strong>
+            </span>
+            <button
+              aria-label={isSidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+              aria-pressed={isSidebarCollapsed}
+              className="sidebar-toggle"
+              onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+              title={isSidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+              type="button"
+            >
+              <Icon name="chevron-right" size={16} />
+            </button>
+          </div>
+          <p className="nav-section-label">主导航</p>
         </div>
-        <p className="nav-section-label">主导航</p>
         <nav className="nav-list" aria-label="主导航">
           {navItems.map((item) => (
             <button
               className={item.key === activeView ? "nav-item nav-item--active" : "nav-item"}
               key={item.key}
               onClick={() => navigateToView(item.key)}
+              title={isSidebarCollapsed ? item.label : undefined}
               type="button"
             >
               <Icon name={item.icon} size={18} />
-              {item.label}
+              <span className="nav-item__label">{item.label}</span>
             </button>
           ))}
         </nav>
@@ -327,7 +341,7 @@ export function App() {
           </div>
           <button className="logout-button" onClick={handleLogout} type="button">
             <Icon name="log-out" size={16} />
-            退出登录
+            <span>退出登录</span>
           </button>
         </div>
       </aside>
