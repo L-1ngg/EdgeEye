@@ -2,7 +2,7 @@
 
 # EdgeEye
 
-Inspection demo system for an Atlas/YOLO edge pipeline, FastAPI backend, and React dashboard frontend.
+面向电力设备智能巡检演示链路的项目入口，覆盖 Atlas/YOLO 边缘推理、FastAPI 后端和 React 可视化前端。
 
 [![Backend](https://img.shields.io/badge/backend-FastAPI-009688?style=flat-square)](backend/)
 [![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-646CFF?style=flat-square)](web/)
@@ -10,72 +10,72 @@ Inspection demo system for an Atlas/YOLO edge pipeline, FastAPI backend, and Rea
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square)](web/tsconfig.app.json)
 [![OpenAPI](https://img.shields.io/badge/API-OpenAPI-6BA539?style=flat-square)](docs/openapi.yaml)
 
-English | [简体中文](README.zh-CN.md)
+[English](README.en.md) | 简体中文
 
 </div>
 
-## Overview
+## 项目概览
 
-EdgeEye connects edge-side inspection data with backend persistence, alarms, repair advice, report generation, and a dashboard UI. The project is organized around a minimum demonstrable inspection flow: camera capture, Atlas edge inference, YOLO detection results, backend API storage and aggregation, and frontend visualization.
+EdgeEye 用于打通边缘侧巡检数据、后端持久化、告警生成、维修建议、报告导出和前端展示。项目围绕一个最小可演示巡检链路组织：摄像头采集、Atlas 边缘推理、YOLO 检测结果、后端 API 存储与聚合、前端可视化展示。
 
-The current repository focuses on the runnable backend service, the React dashboard, and the integration contracts used by all team members.
+当前仓库重点包含可运行的后端服务、React 仪表盘，以及全组联调使用的数据契约。
 
-| Area | Stack | Purpose |
+| 区域 | 技术栈 | 作用 |
 | --- | --- | --- |
-| `backend/` | Python + FastAPI + SQLite | API service, inspection storage, detection upload, alarms, advice fallback, dashboard data, and report export |
-| `training/` | Python 3.12 + uv + Ultralytics | Local YOLO dataset preparation, training entry point, and ONNX export scripts |
-| `dataset/` | YOLO workspace + source notes | Ignored raw/processed data plus committed lightweight source and cleanup docs |
-| `web/` | TypeScript + React + Vite | Operational dashboard for system status, realtime inspection, fault center, reports, and assets |
-| `docs/` | Markdown + OpenAPI | Cross-member contracts, API behavior, integration notes, responsibilities, and review records |
-| `docker-compose.yml` | Docker Compose | Member 4 backend deployment scaffold with persistent volumes |
+| `backend/` | Python + FastAPI + SQLite | API 服务、巡检存储、检测结果上传、告警、维修建议降级生成、Dashboard 数据和报告导出 |
+| `training/` | Python 3.12 + uv + Ultralytics | 本地 YOLO 数据集准备、训练入口和 ONNX 导出脚本 |
+| `dataset/` | YOLO 工作区 + 数据源说明 | 被忽略的原始/处理后数据，以及轻量数据源和清洗报告文档 |
+| `web/` | TypeScript + React + Vite | 系统状态、实时巡检、故障中心、报告中心和资源视图 |
+| `docs/` | Markdown + OpenAPI | 跨成员数据契约、API 行为、联调说明、职责边界和审查记录 |
+| `docker-compose.yml` | Docker Compose | 成员 4 后端部署脚手架和持久化卷配置 |
 
-## Contents
+## 目录
 
-- [Architecture](#architecture)
-- [What Is Included](#what-is-included)
-- [Quick Start](#quick-start)
-- [Backend](#backend)
-- [Training](#training)
-- [Frontend](#frontend)
-- [Configuration](#configuration)
-- [API Surface](#api-surface)
-- [Contracts](#contracts)
-- [Development Checks](#development-checks)
-- [Repository Layout](#repository-layout)
+- [系统架构](#系统架构)
+- [当前能力](#当前能力)
+- [快速启动](#快速启动)
+- [后端](#后端)
+- [训练](#训练)
+- [前端](#前端)
+- [配置](#配置)
+- [API 概览](#api-概览)
+- [契约文档](#契约文档)
+- [开发检查](#开发检查)
+- [仓库结构](#仓库结构)
 
-## Architecture
+## 系统架构
 
 ```mermaid
 flowchart LR
-    Camera[Camera capture] --> Atlas[Atlas edge inference]
-    Atlas --> Model[YOLO detection results]
+    Camera[摄像头采集] --> Atlas[Atlas 边缘推理]
+    Atlas --> Model[YOLO 检测结果]
     Model --> Upload[POST /api/detection/results]
-    Upload --> API[FastAPI backend]
-    API --> Store[(SQLite storage)]
-    API --> Faults[Faults and alarms]
-    API --> Advice[Repair advice]
-    API --> Reports[Inspection reports]
-    API --> Web[React dashboard]
+    Upload --> API[FastAPI 后端]
+    API --> Store[(SQLite 存储)]
+    API --> Faults[故障与告警]
+    API --> Advice[维修建议]
+    API --> Reports[巡检报告]
+    API --> Web[React 仪表盘]
 ```
 
-The edge side submits key-frame detection payloads to the backend. The backend keeps idempotent detection results, aggregates faults and alarms, exposes system and dashboard data, generates rule-template advice when no LLM provider is configured, and serves report export files. The frontend consumes backend-shaped API data and uses typed fallback states when the API is unavailable.
+边缘侧向后端提交关键帧检测结果。后端负责保存幂等检测结果、聚合故障和告警、提供系统状态与 Dashboard 数据、在未配置大模型服务时使用规则模板生成维修建议，并提供报告导出文件。前端消费后端定义好的 API 数据；当后端不可用时，前端会使用类型化的降级状态。
 
-## What Is Included
+## 当前能力
 
-| Capability | Current support |
+| 能力 | 当前支持 |
 | --- | --- |
-| Health and system status | `GET /api/health`, `GET /api/system/status` |
-| Dashboard summary | Counts, active inspections, unresolved faults and alarms, latest high-risk alarm |
-| Inspection lifecycle | Start, finish, fail, list, and latest-result queries |
-| Detection upload | JSON payload upload with bbox validation, idempotency, and duplicate-frame protection |
-| Fault center | Devices, faults, alarms, aggregated events, and process-status updates |
-| Repair advice | Rule-template fallback by default; optional OpenAI-compatible provider configuration |
-| Reports | Report list/detail and HTML/PDF export entry points |
-| Frontend dashboard | Dashboard, realtime inspection, fault center, report center, assets, and demo login shell |
+| 健康检查与系统状态 | `GET /api/health`、`GET /api/system/status` |
+| Dashboard 总览 | 设备数、巡检数、故障数、告警数、运行中巡检、未处理故障/告警、最新高风险告警 |
+| 巡检生命周期 | 创建、完成、失败、列表查询和最新结果查询 |
+| 检测结果上传 | JSON 上传、检测框越界校验、幂等键、重复帧保护 |
+| 故障中心 | 设备、故障、告警、聚合事件和处理状态更新 |
+| 维修建议 | 默认规则模板降级生成；可配置 OpenAI 兼容接口 |
+| 报告中心 | 报告列表、报告详情和 HTML/PDF 导出入口 |
+| 前端仪表盘 | Dashboard、实时巡检、故障中心、报告中心、资源视图和演示登录壳 |
 
-## Quick Start
+## 快速启动
 
-Run the backend in one terminal:
+在一个终端启动后端：
 
 ```bash
 cd backend
@@ -83,7 +83,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Run the frontend in another terminal:
+在另一个终端启动前端：
 
 ```bash
 cd web
@@ -91,79 +91,76 @@ bun install
 bun run dev
 ```
 
-Default local URLs:
+默认本地地址：
 
-| Service | URL |
+| 服务 | 地址 |
 | --- | --- |
-| Backend API | `http://localhost:8000/api` |
-| Frontend | `http://localhost:5173` |
+| 后端 API | `http://localhost:8000/api` |
+| 前端页面 | `http://localhost:5173` |
 
-## Backend
+## 后端
 
-The backend is a FastAPI service for member 4 responsibilities: API endpoints, SQLite persistence, dashboard data, system status, alarms, reports, and backend repair-advice generation.
+后端是成员 4 负责的 FastAPI 服务，覆盖 API 端点、SQLite 持久化、Dashboard 数据、系统状态、告警、报告和维修建议生成。
 
-Start the backend from `backend/`:
+在 `backend/` 目录启动：
 
 ```bash
 uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Run backend tests:
+运行后端测试：
 
 ```bash
 uv run pytest
 ```
 
-Run the backend with Docker Compose from the repository root:
+也可以在仓库根目录使用 Docker Compose 启动后端：
 
 ```bash
 docker compose up --build backend
 ```
 
-The Compose setup exposes `8000:8000` and persists database files, uploaded images, and exported reports in named volumes.
+Compose 配置会暴露 `8000:8000`，并通过命名卷持久化数据库、上传图片和导出报告。
 
-## Frontend
+## 前端
 
-The frontend is a React + Vite dashboard for member 5 work: dashboard overview, realtime inspection, fault center, report center, assets, and later end-to-end demo flows.
+前端是成员 5 负责的 React + Vite 仪表盘，覆盖 Dashboard 总览、实时巡检、故障中心、报告中心、资源视图，以及后续端到端演示流程。
 
-Start the frontend from `web/`:
+在 `web/` 目录启动：
 
 ```bash
 bun install
 bun run dev
 ```
 
-Build the frontend:
+构建前端：
 
 ```bash
 bun run build
 ```
 
-The frontend calls `/api` by default and falls back to typed mock data when the backend is unavailable. Set `VITE_API_BASE_URL` when the API runs on a different base URL:
+前端默认请求 `/api`，当后端不可用时会使用类型化 mock/降级数据。后端不在默认地址时，可以设置 `VITE_API_BASE_URL`：
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 ```
 
-The realtime page refreshes the existing latest-result API path every second,
-so no separate camera process is needed when the backend bridge is enabled.
+实时页面每秒刷新现有 latest-result API 路径；后端相机桥启用时，不需要再启动单独的摄像头进程。
 
-## Training
+## 训练
 
-The training workspace prepares the first detector dataset with four YOLO
-classes: `insulator_normal`, `insulator_surface_damage`, `transformer_normal`,
-and `transformer_surface_damage`. Large raw archives and generated processed
-datasets stay ignored by git; commit only scripts, config, and lightweight docs.
+训练工作区用于准备第一版检测模型数据集，包含四个 YOLO 类别：
+`insulator_normal`、`insulator_surface_damage`、`transformer_normal` 和
+`transformer_surface_damage`。大型原始归档和生成后的 processed 数据不进
+git，只提交脚本、配置和轻量文档。
 
-The optimized insulator-focused candidates are tracked separately under
-`edgeeye-insulator-v1*`. They use two classes, export ONNX as
-`output0 [1,6,8400]`, and are not direct replacements for the four-class
-`edgeeye-detector-v1` baseline without an explicit promotion decision. The
-current recall-first candidate is
-`edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`.
+当前优化候选模型单独记录为 `edgeeye-insulator-v1`，只包含两个绝缘子类别，
+ONNX 输出为 `output0 [1,6,8400]`。它不是四类 `edgeeye-detector-v1`
+基线的直接替换；是否晋升为交付模型需要单独确认。当前召回优先候选模型是
+`edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`。
 
-Prepare and validate the local dataset from `training/`:
+在 `training/` 目录准备并校验本地数据集：
 
 ```bash
 uv sync
@@ -174,80 +171,80 @@ uv run python validate_dataset.py \
   --labels ../dataset/processed/edgeeye-detector-v1/label.names
 ```
 
-See [training/README.md](training/README.md), [dataset/README.md](dataset/README.md),
-[dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md),
-[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md),
-and
-[dataset/docs/edgeeye-insulator-v1-domain-r1-report.md](dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)
-for source mappings, class distribution, optimization metrics, and remaining
-training risks.
+数据源映射、类别分布和剩余训练风险见
+[training/README.md](training/README.md)、[dataset/README.md](dataset/README.md)
+、[dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)
+和
+[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)
+以及
+[dataset/docs/edgeeye-insulator-v1-domain-r1-report.md](dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)。
 
-## Configuration
+## 配置
 
-Backend environment variables use the `EDGEEYE_` prefix. See [backend/.env.example](backend/.env.example) for a copyable template.
+后端环境变量统一使用 `EDGEEYE_` 前缀。可参考 [backend/.env.example](backend/.env.example)。
 
-| Variable | Purpose | Default |
+| 变量 | 作用 | 默认值 |
 | --- | --- | --- |
-| `EDGEEYE_DATABASE_PATH` | SQLite database path | `data/edgeeye.db` |
-| `EDGEEYE_UPLOADS_DIR` | Static root served at `/uploads` | `uploads` |
-| `EDGEEYE_REPORTS_DIR` | Static root served at `/reports` | `reports` |
-| `EDGEEYE_CAMERA_BRIDGE_ENABLED` | Start the built-in no-model USB camera bridge when `/dev/video0` is available | `true` |
-| `EDGEEYE_CAMERA_CAPTURE_BACKEND` | Camera capture backend: `ffmpeg`, `v4l2`, or `auto` | `ffmpeg` |
-| `EDGEEYE_LLM_PROVIDER` | Provider selector | `rule-template` |
-| `EDGEEYE_LLM_API_URL` | Optional OpenAI-compatible chat-completions endpoint | unset |
-| `EDGEEYE_LLM_API_KEY` | Backend-only LLM API key | unset |
-| `EDGEEYE_LLM_MODEL_NAME` | Model name metadata for advice output | `rule-template` |
-| `EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS` | Alarm deduplication window | `300` |
+| `EDGEEYE_DATABASE_PATH` | SQLite 数据库路径 | `data/edgeeye.db` |
+| `EDGEEYE_UPLOADS_DIR` | 挂载到 `/uploads` 的静态目录 | `uploads` |
+| `EDGEEYE_REPORTS_DIR` | 挂载到 `/reports` 的静态目录 | `reports` |
+| `EDGEEYE_CAMERA_BRIDGE_ENABLED` | `/dev/video0` 可用时启动内置无模型 USB 相机桥 | `true` |
+| `EDGEEYE_CAMERA_CAPTURE_BACKEND` | 相机采集后端：`ffmpeg`、`v4l2` 或 `auto` | `ffmpeg` |
+| `EDGEEYE_LLM_PROVIDER` | 大模型服务选择 | `rule-template` |
+| `EDGEEYE_LLM_API_URL` | 可选 OpenAI 兼容 chat-completions 地址 | 未设置 |
+| `EDGEEYE_LLM_API_KEY` | 仅后端使用的大模型密钥 | 未设置 |
+| `EDGEEYE_LLM_MODEL_NAME` | 维修建议输出中的模型名称元数据 | `rule-template` |
+| `EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS` | 告警去重窗口 | `300` |
 
-When no provider is configured or the provider call fails, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
+未配置大模型服务，或调用失败时，`POST /api/advice/generate` 会保存并返回完整的规则模板降级建议。
 
-## API Surface
+## API 概览
 
 <details>
-<summary>Implemented backend endpoints</summary>
+<summary>已实现后端接口</summary>
 
-| Domain | Method | Path |
+| 域 | 方法 | 路径 |
 | --- | --- | --- |
-| Health | `GET` | `/api/health` |
-| System | `GET` | `/api/system/status` |
+| 健康检查 | `GET` | `/api/health` |
+| 系统状态 | `GET` | `/api/system/status` |
 | Dashboard | `GET` | `/api/dashboard` |
-| Inspections | `POST` | `/api/inspection/start` |
-| Inspections | `POST` | `/api/inspections/{id}/finish` |
-| Inspections | `POST` | `/api/inspections/{id}/fail` |
-| Inspections | `GET` | `/api/inspections` |
-| Inspections | `GET` | `/api/inspections/{id}/latest-result` |
-| Detection | `POST` | `/api/detection/results` |
-| Assets | `GET` | `/api/devices` |
-| Fault center | `GET` | `/api/faults` |
-| Fault center | `GET` | `/api/alarms` |
-| Fault center | `GET` | `/api/events` |
-| Fault center | `PATCH` | `/api/faults/{id}/status` |
-| Fault center | `PATCH` | `/api/alarms/{id}/status` |
-| Advice | `POST` | `/api/advice/generate` |
-| Advice | `GET` | `/api/faults/{id}/advice` |
-| Reports | `GET` | `/api/reports` |
-| Reports | `GET` | `/api/reports/{id}` |
-| Reports | `GET` | `/api/reports/{id}/export` |
+| 巡检 | `POST` | `/api/inspection/start` |
+| 巡检 | `POST` | `/api/inspections/{id}/finish` |
+| 巡检 | `POST` | `/api/inspections/{id}/fail` |
+| 巡检 | `GET` | `/api/inspections` |
+| 巡检 | `GET` | `/api/inspections/{id}/latest-result` |
+| 检测结果 | `POST` | `/api/detection/results` |
+| 资源 | `GET` | `/api/devices` |
+| 故障中心 | `GET` | `/api/faults` |
+| 故障中心 | `GET` | `/api/alarms` |
+| 故障中心 | `GET` | `/api/events` |
+| 故障中心 | `PATCH` | `/api/faults/{id}/status` |
+| 故障中心 | `PATCH` | `/api/alarms/{id}/status` |
+| 维修建议 | `POST` | `/api/advice/generate` |
+| 维修建议 | `GET` | `/api/faults/{id}/advice` |
+| 报告 | `GET` | `/api/reports` |
+| 报告 | `GET` | `/api/reports/{id}` |
+| 报告 | `GET` | `/api/reports/{id}/export` |
 
 </details>
 
-## Contracts
+## 契约文档
 
-The source of truth for cross-module fields and API behavior is:
+跨模块字段和 API 行为以以下文档为准：
 
-| Document | Purpose |
+| 文档 | 作用 |
 | --- | --- |
-| [docs/contracts.md](docs/contracts.md) | Shared data shapes, enums, API response envelope, idempotency, and frontend data contracts |
-| [docs/openapi.yaml](docs/openapi.yaml) | Machine-checkable API contract |
-| [docs/api-spec.md](docs/api-spec.md) | Endpoint-level API specification |
-| [docs/interfaces-and-deliverables.md](docs/interfaces-and-deliverables.md) | Cross-member data flow, responsibilities, and handoff boundaries |
-| [docs/engineering-standards.md](docs/engineering-standards.md) | Repository, configuration, logging, testing, and integration standards |
+| [docs/contracts.md](docs/contracts.md) | 共享数据结构、枚举、API 响应包裹、幂等规则和前端数据契约 |
+| [docs/openapi.yaml](docs/openapi.yaml) | 机器可校验的 API 契约 |
+| [docs/api-spec.md](docs/api-spec.md) | 端点级 API 说明 |
+| [docs/interfaces-and-deliverables.md](docs/interfaces-and-deliverables.md) | 跨成员数据流、职责边界和交付关系 |
+| [docs/engineering-standards.md](docs/engineering-standards.md) | 仓库、配置、日志、测试和联调标准 |
 
-Any temporary field, enum, or route change must update the relevant contract documents before the implementation depends on it.
+任何临时新增字段、枚举或路由变更，都需要先同步更新相关契约文档，再让实现依赖它。
 
-## Development Checks
+## 开发检查
 
-Use these checks before handing off integration work:
+联调交付前建议至少执行：
 
 ```bash
 cd backend
@@ -267,17 +264,19 @@ uv run python validate_dataset.py \
   --labels ../dataset/processed/edgeeye-detector-v1/label.names
 ```
 
-For documentation and API contract changes, also verify that [docs/openapi.yaml](docs/openapi.yaml) still parses and matches the implementation surface.
+涉及文档和 API 契约变更时，还需要确认 [docs/openapi.yaml](docs/openapi.yaml) 能正常解析，并且与实际接口面保持一致。
 
-## Repository Layout
+## 仓库结构
 
 ```text
 .
-├── backend/              FastAPI service, API routes, Pydantic models, SQLite services, tests
-├── dataset/              Local dataset workspace, source notes, and cleanup reports
-├── docs/                 Contracts, engineering standards, module documents, OpenAPI spec
-├── training/             YOLO dataset preparation, training, and ONNX export scripts
-├── web/                  React + Vite dashboard frontend
-├── docker-compose.yml    Backend deployment scaffold
-└── README.md             Project entry point
+├── backend/              FastAPI 服务、API 路由、Pydantic 模型、SQLite 服务、测试
+├── dataset/              本地数据集工作区、数据源说明和清洗报告
+├── docs/                 契约、工程规范、模块文档、OpenAPI 规范
+├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
+├── web/                  React + Vite 仪表盘前端
+├── docker-compose.yml    后端部署脚手架
+├── README.md             中文项目入口
+├── README.en.md          英文项目入口
+└── README.zh-CN.md       中文项目入口副本
 ```

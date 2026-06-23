@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square)](web/tsconfig.app.json)
 [![OpenAPI](https://img.shields.io/badge/API-OpenAPI-6BA539?style=flat-square)](docs/openapi.yaml)
 
-[English](README.md) | 简体中文
+[English](README.en.md) | 简体中文
 
 </div>
 
@@ -146,6 +146,8 @@ bun run build
 VITE_API_BASE_URL=http://localhost:8000/api bun run dev
 ```
 
+实时页面每秒刷新现有 latest-result API 路径；后端相机桥启用时，不需要再启动单独的摄像头进程。
+
 ## 训练
 
 训练工作区用于准备第一版检测模型数据集，包含四个 YOLO 类别：
@@ -155,7 +157,8 @@ git，只提交脚本、配置和轻量文档。
 
 当前优化候选模型单独记录为 `edgeeye-insulator-v1`，只包含两个绝缘子类别，
 ONNX 输出为 `output0 [1,6,8400]`。它不是四类 `edgeeye-detector-v1`
-基线的直接替换；是否晋升为交付模型需要单独确认。
+基线的直接替换；是否晋升为交付模型需要单独确认。当前召回优先候选模型是
+`edgeeye-insulator-v1-domain-r1-opt30-yolov8s-adamw`。
 
 在 `training/` 目录准备并校验本地数据集：
 
@@ -172,7 +175,9 @@ uv run python validate_dataset.py \
 [training/README.md](training/README.md)、[dataset/README.md](dataset/README.md)
 、[dataset/docs/edgeeye-detector-v1-report.md](dataset/docs/edgeeye-detector-v1-report.md)
 和
-[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)。
+[dataset/docs/edgeeye-insulator-v1-optimization-report.md](dataset/docs/edgeeye-insulator-v1-optimization-report.md)
+以及
+[dataset/docs/edgeeye-insulator-v1-domain-r1-report.md](dataset/docs/edgeeye-insulator-v1-domain-r1-report.md)。
 
 ## 配置
 
@@ -183,6 +188,8 @@ uv run python validate_dataset.py \
 | `EDGEEYE_DATABASE_PATH` | SQLite 数据库路径 | `data/edgeeye.db` |
 | `EDGEEYE_UPLOADS_DIR` | 挂载到 `/uploads` 的静态目录 | `uploads` |
 | `EDGEEYE_REPORTS_DIR` | 挂载到 `/reports` 的静态目录 | `reports` |
+| `EDGEEYE_CAMERA_BRIDGE_ENABLED` | `/dev/video0` 可用时启动内置无模型 USB 相机桥 | `true` |
+| `EDGEEYE_CAMERA_CAPTURE_BACKEND` | 相机采集后端：`ffmpeg`、`v4l2` 或 `auto` | `ffmpeg` |
 | `EDGEEYE_LLM_PROVIDER` | 大模型服务选择 | `rule-template` |
 | `EDGEEYE_LLM_API_URL` | 可选 OpenAI 兼容 chat-completions 地址 | 未设置 |
 | `EDGEEYE_LLM_API_KEY` | 仅后端使用的大模型密钥 | 未设置 |
@@ -269,6 +276,7 @@ uv run python validate_dataset.py \
 ├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
 ├── web/                  React + Vite 仪表盘前端
 ├── docker-compose.yml    后端部署脚手架
-├── README.md             英文项目入口
-└── README.zh-CN.md       中文项目入口
+├── README.md             中文项目入口
+├── README.en.md          英文项目入口
+└── README.zh-CN.md       中文项目入口副本
 ```
