@@ -369,3 +369,36 @@ Added the domain-r1 source-style controlled insulator dataset policy, trained an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Realtime stream recovery UI
+
+**Date**: 2026-06-23
+**Task**: Realtime stream recovery UI
+**Branch**: `main`
+
+### Summary
+
+Pulled latest main, fixed realtime page stream recovery so MJPEG failures retry and latest-result metadata remains visible, then verified backend pytest, frontend build, and local HTTP smoke.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42eef03` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
