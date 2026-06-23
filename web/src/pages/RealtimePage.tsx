@@ -14,14 +14,19 @@ interface RealtimePageProps {
 
 type Detection = RealtimeSnapshot["detections"][number];
 type FrameLoadState = "loading" | "loaded" | "failed";
+const streamReconnectMs = 3000;
 
 export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
   const [frameLoadState, setFrameLoadState] = useState<FrameLoadState>("loading");
+  const [streamRetryToken, setStreamRetryToken] = useState(0);
   const npuUsage = snapshot.performance.npuUsage;
   const hasResultFrame = snapshot.resultStatus === "ready" || snapshot.resultStatus === "stale";
-  const streamSource = getCameraStreamUrl();
+  const baseStreamSource = getCameraStreamUrl();
+  const streamSource = streamRetryToken === 0 ? baseStreamSource : `${baseStreamSource}?retry=${streamRetryToken}`;
+  const hasStreamSource = baseStreamSource.length > 0;
   const canDisplayStream = frameLoadState === "loaded";
-  const canDisplayMetadata = hasResultFrame && canDisplayStream;
+  const canDisplayMetadata = hasResultFrame;
+  const canOverlayDetections = hasResultFrame && canDisplayStream;
   const shouldShowFrameFallback = !canDisplayStream;
   const averageConfidence = getAverageConfidence(snapshot.detections);
   const primaryDetection = snapshot.detections[0] ?? null;
@@ -29,6 +34,25 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
   useEffect(() => {
     setFrameLoadState("loading");
   }, [streamSource]);
+
+  useEffect(() => {
+    setStreamRetryToken(0);
+  }, [baseStreamSource]);
+
+  useEffect(() => {
+    if (frameLoadState !== "failed") {
+      return;
+    }
+
+    const retryId = window.setTimeout(() => {
+      setFrameLoadState("loading");
+      setStreamRetryToken((currentToken) => currentToken + 1);
+    }, streamReconnectMs);
+
+    return () => {
+      window.clearTimeout(retryId);
+    };
+  }, [frameLoadState]);
 
   return (
     <div className="realtime-flow">
@@ -71,11 +95,11 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
             {shouldShowFrameFallback ? (
               <FrameFallback
                 frameLoadState={frameLoadState}
-                hasFrameSource={true}
+                hasFrameSource={hasStreamSource}
                 status={snapshot.resultStatus}
               />
             ) : null}
-            {canDisplayMetadata
+            {canOverlayDetections
               ? snapshot.detections.map((detection) => (
                   <DetectionBox
                     detection={detection}
@@ -89,12 +113,12 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <span className={`live-dot live-dot--${canDisplayStream ? "good" : "warning"}`} aria-hidden="true" />
               {getStreamTagText(frameLoadState)}
             </div>
-            {snapshot.resultStatus === "stale" && canDisplayMetadata ? (
+            {snapshot.resultStatus === "stale" && canOverlayDetections ? (
               <div className="canvas-alert">实时结果已过期，当前显示最后一帧。</div>
             ) : null}
           </div>
 
-          {canDisplayStream ? (
+          {canDisplayStream || hasResultFrame ? (
             <div className="video-caption">
               <span>{hasResultFrame ? `Frame ${snapshot.frameSeq ?? "-"}` : "Live stream"}</span>
               <span>{hasResultFrame ? formatTime(snapshot.receivedAt ?? snapshot.timestamp) : getRealtimeStateMessage(snapshot.resultStatus)}</span>
@@ -205,7 +229,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
       ) : (
         <FrameDataUnavailablePanel
           frameLoadState={frameLoadState}
-          hasFrameSource={canDisplayStream}
+          hasFrameSource={hasStreamSource}
           status={snapshot.resultStatus}
         />
       )}
