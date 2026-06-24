@@ -39,6 +39,8 @@ from app.services.storage import SQLiteStore
 BEIJING_TZ = timezone(timedelta(hours=8))
 RULE_VERSION = "builtin-2026-06-17"
 RISK_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-pro"
 
 
 def current_timestamp() -> datetime:
@@ -70,6 +72,18 @@ def _json_load(value: str | None, default: Any = None) -> Any:
 def _payload_hash(payload: DetectionUploadRequest) -> str:
     body = payload.model_dump(mode="json")
     return hashlib.sha256(_json_dump(body).encode("utf-8")).hexdigest()
+
+
+def _resolve_llm_provider_config() -> tuple[str | None, str | None, str]:
+    provider = settings.llm_provider.strip().lower()
+    api_url = settings.llm_api_url.strip() if settings.llm_api_url else None
+    configured_model = settings.llm_model_name.strip()
+
+    if provider == "deepseek":
+        model_name = configured_model if configured_model and configured_model != "rule-template" else DEEPSEEK_DEFAULT_MODEL
+        return api_url or DEEPSEEK_CHAT_COMPLETIONS_URL, model_name, provider
+
+    return api_url, configured_model, provider
 
 
 def _bounded_page(page: int, page_size: int) -> tuple[int, int, int]:
@@ -1184,59 +1198,96 @@ class InspectionService:
 
     def _rule_template_advice(self, fault: sqlite3.Row) -> dict[str, Any]:
         fault_type = fault["fault_type"]
+        fault_labels = {
+            "surface_damage": "表面破损",
+            "rust": "锈蚀",
+            "foreign_object": "异物附着",
+            "smoke": "烟雾",
+            "fire": "明火",
+            "person_intrusion": "人员闯入",
+            "helmet_missing": "未佩戴安全帽",
+            "unknown": "未知故障",
+        }
+        risk_labels = {
+            "none": "无风险",
+            "low": "低风险",
+            "medium": "中风险",
+            "high": "高风险",
+            "critical": "严重风险",
+        }
+        fault_label = fault_labels.get(fault_type, fault_type)
+        risk_label = risk_labels.get(fault["risk_level"], fault["risk_level"])
         base = {
-            "possibleCauses": ["equipment aging", "external impact", "environmental exposure"],
-            "riskAnalysis": f"{fault_type} is classified as {fault['risk_level']} risk and requires manual review.",
+            "possibleCauses": ["设备长期运行老化", "外力冲击或机械振动", "潮湿、污秽或高温等环境影响"],
+            "riskAnalysis": f"检测到{fault_label}，当前风险等级为{risk_label}。该问题可能影响设备运行稳定性，建议尽快安排人工复核。",
             "inspectionSteps": [
-                "Verify the best evidence frame and nearby frames.",
-                "Inspect the device area on site after safety isolation.",
-                "Record whether the issue is expanding or stable.",
+                "核对最佳证据帧及相邻帧，确认故障位置和范围。",
+                "在满足安全隔离条件后，对现场设备外观、连接点和周边环境进行复核。",
+                "记录故障是否扩大、是否伴随异响、异味、放电痕迹或温升异常。",
             ],
             "maintenanceSuggestions": [
-                "Schedule a qualified technician for follow-up inspection.",
-                "Repair or replace affected parts if the field check confirms the fault.",
+                "安排具备资质的运维人员进行现场复检。",
+                "若现场确认故障存在，应根据设备规程修复或更换受影响部件。",
             ],
             "safetyNotes": [
-                "Confirm the equipment is in a safe operating state before maintenance.",
-                "Treat generated advice as decision support that must be reviewed by staff.",
+                "现场操作前确认设备处于安全状态，并执行必要的停电、验电和隔离措施。",
+                "系统生成的建议仅作为辅助判断，最终处置需由现场负责人复核确认。",
             ],
         }
         if fault_type in {"smoke", "fire"}:
-            base["possibleCauses"] = ["overheating", "short circuit", "flammable material nearby"]
+            base["possibleCauses"] = ["设备过热", "短路或接触不良", "周边存在易燃物或散热条件不足"]
             base["maintenanceSuggestions"] = [
-                "Escalate immediately to emergency response staff.",
-                "Isolate power according to site safety procedures.",
+                "立即升级为紧急处置流程并通知现场值守人员。",
+                "按现场安全规程隔离电源，确认无持续燃烧、烟雾或二次风险后再开展复核。",
             ]
         return base
 
     def _generate_advice_payload(self, fault: sqlite3.Row) -> tuple[dict[str, Any], str, str]:
-        if not settings.llm_api_url or not settings.llm_api_key or settings.llm_provider == "rule-template":
+        api_url, model_name, provider = _resolve_llm_provider_config()
+        if not api_url or not settings.llm_api_key or provider == "rule-template":
             return self._rule_template_advice(fault), "rule-template", "fallback"
 
-        last_error: Exception | None = None
         for _ in range(max(settings.llm_max_retries, 1)):
             try:
-                return self._call_llm_provider(fault), settings.llm_model_name, "ready"
+                return self._call_llm_provider(fault, api_url=api_url, model_name=model_name), model_name, "ready"
             except (OSError, ValueError, KeyError, urllib.error.URLError) as exc:
-                last_error = exc
+                _ = exc
         fallback = self._rule_template_advice(fault)
         fallback["riskAnalysis"] = (
-            f"{fallback['riskAnalysis']} LLM provider failed; fallback advice was generated locally."
+            f"{fallback['riskAnalysis']} 大模型服务暂不可用，已采用规则模板生成本建议。"
         )
-        if last_error is not None:
-            fallback["riskAnalysis"] = f"{fallback['riskAnalysis']} Last error: {type(last_error).__name__}."
         return fallback, "rule-template", "fallback"
 
-    def _call_llm_provider(self, fault: sqlite3.Row) -> dict[str, Any]:
+    def _call_llm_provider(self, fault: sqlite3.Row, *, api_url: str, model_name: str) -> dict[str, Any]:
+        fault_labels = {
+            "surface_damage": "表面破损",
+            "rust": "锈蚀",
+            "foreign_object": "异物附着",
+            "smoke": "烟雾",
+            "fire": "明火",
+            "person_intrusion": "人员闯入",
+            "helmet_missing": "未佩戴安全帽",
+            "unknown": "未知故障",
+        }
+        risk_labels = {
+            "none": "无风险",
+            "low": "低风险",
+            "medium": "中风险",
+            "high": "高风险",
+            "critical": "严重风险",
+        }
         body = {
-            "model": settings.llm_model_name,
+            "model": model_name,
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "You generate electrical inspection repair advice. "
-                        "Return JSON only with possibleCauses, riskAnalysis, "
-                        "inspectionSteps, maintenanceSuggestions, and safetyNotes."
+                        "你是电力设备智能巡检维修建议助手。请只返回 json 对象，不要返回 Markdown。"
+                        "JSON 必须包含 possibleCauses、riskAnalysis、inspectionSteps、maintenanceSuggestions、safetyNotes。"
+                        "所有字段值必须使用中文，列表项要面向现场运维人员，表达简洁可执行。"
+                        "示例：{\"possibleCauses\":[\"原因\"],\"riskAnalysis\":\"风险分析\","
+                        "\"inspectionSteps\":[\"步骤\"],\"maintenanceSuggestions\":[\"建议\"],"
+                        "\"safetyNotes\":[\"注意事项\"]}。"
                     ),
                 },
                 {
@@ -1245,8 +1296,10 @@ class InspectionService:
                         {
                             "deviceType": fault["device_type"],
                             "faultType": fault["fault_type"],
+                            "faultTypeLabel": fault_labels.get(fault["fault_type"], fault["fault_type"]),
                             "confidence": fault["confidence"],
                             "riskLevel": fault["risk_level"],
+                            "riskLevelLabel": risk_labels.get(fault["risk_level"], fault["risk_level"]),
                             "location": fault["location"],
                             "bestImageUrl": fault["best_annotated_image_url"] or fault["best_image_url"],
                         }
@@ -1254,10 +1307,11 @@ class InspectionService:
                 },
             ],
             "temperature": 0.2,
+            "max_tokens": 1200,
             "response_format": {"type": "json_object"},
         }
         request = urllib.request.Request(
-            settings.llm_api_url,
+            api_url,
             data=_json_dump(body).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {settings.llm_api_key}",

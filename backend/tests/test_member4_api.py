@@ -128,6 +128,11 @@ def test_member4_detection_advice_and_report_flow() -> None:
     advice_data = advice.json()["data"]
     assert advice_data["adviceStatus"] == "fallback"
     assert advice_data["modelName"] == "rule-template"
+    assert advice_data["possibleCauses"] == ["设备长期运行老化", "外力冲击或机械振动", "潮湿、污秽或高温等环境影响"]
+    assert "检测到表面破损" in advice_data["riskAnalysis"]
+    assert advice_data["inspectionSteps"][0] == "核对最佳证据帧及相邻帧，确认故障位置和范围。"
+    assert advice_data["maintenanceSuggestions"][0] == "安排具备资质的运维人员进行现场复检。"
+    assert advice_data["safetyNotes"][0] == "现场操作前确认设备处于安全状态，并执行必要的停电、验电和隔离措施。"
 
     saved_advice = client.get(f"/api/faults/{fault['faultId']}/advice")
     assert saved_advice.status_code == 200
@@ -291,11 +296,11 @@ def test_advice_generation_uses_configured_llm_provider(monkeypatch) -> None:
     assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200
     fault_id = client.get("/api/faults").json()["data"]["items"][0]["faultId"]
     advice_content = {
-        "possibleCauses": ["loose fitting"],
-        "riskAnalysis": "Provider generated risk analysis.",
-        "inspectionSteps": ["Check the fitting torque."],
-        "maintenanceSuggestions": ["Tighten or replace the affected component."],
-        "safetyNotes": ["Review the advice before field work."],
+        "possibleCauses": ["连接件松动"],
+        "riskAnalysis": "检测到表面破损，存在绝缘性能下降风险。",
+        "inspectionSteps": ["检查破损范围和连接状态。"],
+        "maintenanceSuggestions": ["安排专业人员复检并修复受影响部件。"],
+        "safetyNotes": ["作业前确认设备已完成安全隔离。"],
     }
 
     class FakeResponse:
@@ -329,4 +334,96 @@ def test_advice_generation_uses_configured_llm_provider(monkeypatch) -> None:
     data = response.json()["data"]
     assert data["adviceStatus"] == "ready"
     assert data["modelName"] == "repair-model"
-    assert data["possibleCauses"] == ["loose fitting"]
+    assert data["possibleCauses"] == ["连接件松动"]
+    assert data["riskAnalysis"] == "检测到表面破损，存在绝缘性能下降风险。"
+
+
+def test_advice_generation_uses_deepseek_provider_defaults(monkeypatch) -> None:
+    inspection_id = start_inspection()
+    assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200
+    fault_id = client.get("/api/faults").json()["data"]["items"][0]["faultId"]
+    advice_content = {
+        "possibleCauses": ["绝缘子表面受到外力冲击"],
+        "riskAnalysis": "检测到表面破损，可能降低绝缘性能并扩大缺陷范围。",
+        "inspectionSteps": ["核对证据帧中的破损位置，并复查相邻帧。"],
+        "maintenanceSuggestions": ["安排现场人员复核破损范围，必要时更换绝缘子。"],
+        "safetyNotes": ["现场复核前应完成停电、验电和安全隔离。"],
+    }
+    captured_request: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {"choices": [{"message": {"content": json.dumps(advice_content, ensure_ascii=False)}}]},
+                ensure_ascii=False,
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured_request["timeout"] = timeout
+        captured_request["url"] = request.full_url
+        captured_request["authorization"] = request.headers["Authorization"]
+        captured_request["content_type"] = request.headers["Content-type"]
+        captured_request["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr(service_module.settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(service_module.settings, "llm_api_url", None)
+    monkeypatch.setattr(service_module.settings, "llm_api_key", "deepseek-test-key")
+    monkeypatch.setattr(service_module.settings, "llm_model_name", "rule-template")
+    monkeypatch.setattr(service_module.settings, "llm_timeout_seconds", 2.5)
+    monkeypatch.setattr(service_module.settings, "llm_max_retries", 1)
+    monkeypatch.setattr(service_module.urllib.request, "urlopen", fake_urlopen)
+
+    response = client.post("/api/advice/generate", json={"faultId": fault_id})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["adviceStatus"] == "ready"
+    assert data["modelName"] == "deepseek-v4-pro"
+    assert data["riskAnalysis"] == "检测到表面破损，可能降低绝缘性能并扩大缺陷范围。"
+    assert captured_request["timeout"] == 2.5
+    assert captured_request["url"] == "https://api.deepseek.com/chat/completions"
+    assert captured_request["authorization"] == "Bearer deepseek-test-key"
+    assert captured_request["content_type"] == "application/json"
+    body = captured_request["body"]
+    assert body["model"] == "deepseek-v4-pro"
+    assert body["response_format"] == {"type": "json_object"}
+    assert "json" in body["messages"][0]["content"]
+    assert "所有字段值必须使用中文" in body["messages"][0]["content"]
+
+    saved_advice = client.get(f"/api/faults/{fault_id}/advice")
+    assert saved_advice.status_code == 200
+    assert saved_advice.json()["data"]["riskAnalysis"] == data["riskAnalysis"]
+
+
+def test_deepseek_provider_failure_saves_chinese_fallback_without_internal_error(monkeypatch) -> None:
+    inspection_id = start_inspection()
+    assert client.post("/api/detection/results", json=detection_payload(inspection_id)).status_code == 200
+    fault_id = client.get("/api/faults").json()["data"]["items"][0]["faultId"]
+
+    def fake_urlopen(_request, timeout):
+        assert timeout == service_module.settings.llm_timeout_seconds
+        raise service_module.urllib.error.URLError("provider unavailable")
+
+    monkeypatch.setattr(service_module.settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(service_module.settings, "llm_api_url", None)
+    monkeypatch.setattr(service_module.settings, "llm_api_key", "deepseek-test-key")
+    monkeypatch.setattr(service_module.settings, "llm_model_name", "rule-template")
+    monkeypatch.setattr(service_module.settings, "llm_max_retries", 1)
+    monkeypatch.setattr(service_module.urllib.request, "urlopen", fake_urlopen)
+
+    response = client.post("/api/advice/generate", json={"faultId": fault_id})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["adviceStatus"] == "fallback"
+    assert data["modelName"] == "rule-template"
+    assert "大模型服务暂不可用" in data["riskAnalysis"]
+    assert "URLError" not in data["riskAnalysis"]
+    assert "provider unavailable" not in data["riskAnalysis"]

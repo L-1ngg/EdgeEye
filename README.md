@@ -192,11 +192,18 @@ uv run python validate_dataset.py \
 | `EDGEEYE_REPORTS_DIR` | 挂载到 `/reports` 的静态目录 | `reports` |
 | `EDGEEYE_CAMERA_BRIDGE_ENABLED` | `/dev/video0` 可用时启动内置无模型 USB 相机桥 | `true` |
 | `EDGEEYE_CAMERA_CAPTURE_BACKEND` | 相机采集后端：`ffmpeg`、`v4l2` 或 `auto` | `ffmpeg` |
-| `EDGEEYE_LLM_PROVIDER` | 大模型服务选择 | `rule-template` |
-| `EDGEEYE_LLM_API_URL` | 可选 OpenAI 兼容 chat-completions 地址 | 未设置 |
+| `EDGEEYE_LLM_PROVIDER` | 大模型服务选择：`rule-template`、`deepseek` 或 `openai-compatible` | `rule-template` |
+| `EDGEEYE_LLM_API_URL` | 可选 OpenAI 兼容 chat-completions 地址；`deepseek` 可留空使用官方地址 | 未设置 |
 | `EDGEEYE_LLM_API_KEY` | 仅后端使用的大模型密钥 | 未设置 |
-| `EDGEEYE_LLM_MODEL_NAME` | 维修建议输出中的模型名称元数据 | `rule-template` |
+| `EDGEEYE_LLM_MODEL_NAME` | 发送给 provider 并记录到维修建议的模型名；`deepseek` 留默认值时使用 `deepseek-v4-pro` | `rule-template` |
 | `EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS` | 告警去重窗口 | `300` |
+
+使用 DeepSeek 官方 API 时，在 `backend/.env` 中配置本地密钥即可，不要把真实 key 写入仓库：
+
+```env
+EDGEEYE_LLM_PROVIDER=deepseek
+EDGEEYE_LLM_API_KEY=<your-deepseek-api-key>
+```
 
 未配置大模型服务，或调用失败时，`POST /api/advice/generate` 会保存并返回完整的规则模板降级建议。
 

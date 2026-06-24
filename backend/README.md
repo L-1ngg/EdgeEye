@@ -47,10 +47,10 @@ Environment variables use the `EDGEEYE_` prefix:
 - `EDGEEYE_EDGE_MODEL_OUTPUT_SHAPE`: YOLO output tensor shape. Defaults to `1,6,8400`.
 - `EDGEEYE_EDGE_MODEL_DEVICE_ID`: Atlas device id. Defaults to `0`.
 - `EDGEEYE_EDGE_MODEL_ANNOTATED_ENABLED`: save annotated sample images. Defaults to `true`.
-- `EDGEEYE_LLM_PROVIDER`: reserved provider selector. Defaults to `rule-template`.
-- `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint.
+- `EDGEEYE_LLM_PROVIDER`: provider selector. Use `rule-template`, `deepseek`, or `openai-compatible`. Defaults to `rule-template`.
+- `EDGEEYE_LLM_API_URL`: optional OpenAI-compatible chat-completions endpoint. With `deepseek`, leave it empty to use the official DeepSeek endpoint.
 - `EDGEEYE_LLM_API_KEY`: optional backend-only LLM API key. It is never returned to the frontend.
-- `EDGEEYE_LLM_MODEL_NAME`: model name metadata for future provider calls.
+- `EDGEEYE_LLM_MODEL_NAME`: model name sent to the provider and saved on advice. With `deepseek`, leave the default to use `deepseek-v4-pro`.
 - `EDGEEYE_LLM_TIMEOUT_SECONDS`: timeout for provider calls.
 - `EDGEEYE_LLM_MAX_RETRIES`: retry count before rule-template fallback.
 - `EDGEEYE_ALARM_DEDUP_WINDOW_SECONDS`: window (seconds) within which a duplicate alarm key is suppressed instead of reopened. Defaults to `300`.
@@ -58,6 +58,13 @@ Environment variables use the `EDGEEYE_` prefix:
 See `.env.example` for a copyable template.
 
 When no provider is configured or the provider call fails, `POST /api/advice/generate` saves and returns a complete rule-template fallback advice object.
+
+DeepSeek local example:
+
+```env
+EDGEEYE_LLM_PROVIDER=deepseek
+EDGEEYE_LLM_API_KEY=<your-deepseek-api-key>
+```
 
 ## Atlas Integration Notes
 
