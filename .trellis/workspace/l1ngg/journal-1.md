@@ -501,3 +501,36 @@ Added low-frequency operational data polling so persisted realtime faults, alarm
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Report status UI compact
+
+**Date**: 2026-06-25
+**Task**: Report status UI compact
+**Branch**: `main`
+
+### Summary
+
+Compacted the report center status pill so ready reports no longer render as a stretched green bar; verified with frontend build.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0b394de` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-06-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~503 | Active |
+| `journal-1.md` | ~536 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-06-25 | Report status UI compact | `0b394de` | `main` |
 | 15 | 2026-06-25 | Auto-refresh fault center data | `8a4b03d` | `main` |
 | 14 | 2026-06-24 | Fault evidence preview | `893edf9` | `main` |
 | 13 | 2026-06-24 | DeepSeek repair advice provider | `9278a27` | `main` |
