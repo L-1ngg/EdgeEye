@@ -468,3 +468,36 @@ Added fault center evidence image preview using event latestImageUrl/latestFrame
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Auto-refresh fault center data
+
+**Date**: 2026-06-25
+**Task**: Auto-refresh fault center data
+**Branch**: `main`
+
+### Summary
+
+Added low-frequency operational data polling so persisted realtime faults, alarms, events, and dashboard counts refresh without page reload.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8a4b03d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
