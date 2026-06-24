@@ -534,3 +534,36 @@ Compacted the report center status pill so ready reports no longer render as a s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Frontend demo data audit
+
+**Date**: 2026-06-25
+**Task**: Frontend demo data audit
+**Branch**: `main`
+
+### Summary
+
+Completed the frontend demo-data audit task. Confirmed no standalone frontend mock data files remain; documented remaining demo auth, empty-state fallbacks, and README wording; verified web build.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc6ea57` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
