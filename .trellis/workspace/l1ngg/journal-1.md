@@ -435,3 +435,36 @@ Added DeepSeek official chat-completions support for persisted Chinese repair ad
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Fault evidence preview
+
+**Date**: 2026-06-24
+**Task**: Fault evidence preview
+**Branch**: `main`
+
+### Summary
+
+Added fault center evidence image preview using event latestImageUrl/latestFrameId, preserving existing advice workflow and frontend build validity.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `893edf9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

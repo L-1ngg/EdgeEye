@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
+- **Total Sessions**: 14
 - **Last Active**: 2026-06-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~437 | Active |
+| `journal-1.md` | ~470 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-06-24 | Fault evidence preview | `893edf9` | `main` |
 | 13 | 2026-06-24 | DeepSeek repair advice provider | `9278a27` | `main` |
 | 12 | 2026-06-23 | Realtime stream recovery UI | `42eef03` | `main` |
 | 11 | 2026-06-22 | Insulator recall domain-r1 candidate | `8f55600` | `main` |
