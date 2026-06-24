@@ -48,6 +48,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: IconName }> = [
 ];
 const defaultView: ViewKey = "dashboard";
 const realtimeRefreshMs = 1000;
+const operationalDataRefreshMs = 3000;
 const viewKeys = new Set<ViewKey>(navItems.map((item) => item.key));
 
 export function App() {
@@ -127,6 +128,71 @@ export function App() {
 
     return () => {
       cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function refreshOperationalData() {
+      try {
+        const [dashboardResult, systemResult, eventResult, faultResult, alarmResult] = await Promise.all([
+          getDashboard(),
+          getSystemOverview(),
+          getEvents(),
+          getFaults(),
+          getAlarms()
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setAppData((currentData) => {
+          if (!currentData) {
+            return currentData;
+          }
+
+          return {
+            ...currentData,
+            dashboard: dashboardResult.data,
+            system: systemResult.data,
+            events: eventResult.data,
+            faults: faultResult.data,
+            alarms: alarmResult.data
+          };
+        });
+        setDataSources((currentSources) => ({
+          ...currentSources,
+          dashboard: dashboardResult.source,
+          faults: eventResult.source === "api" && faultResult.source === "api" && alarmResult.source === "api" ? "api" : "unavailable",
+          assets: faultResult.source === "api" && alarmResult.source === "api" ? "api" : "unavailable"
+        }));
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setDataSources((currentSources) => ({
+          ...currentSources,
+          dashboard: "unavailable",
+          faults: "unavailable",
+          assets: "unavailable"
+        }));
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshOperationalData();
+    }, operationalDataRefreshMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [isAuthenticated]);
 
