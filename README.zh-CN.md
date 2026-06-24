@@ -40,7 +40,9 @@ EdgeEye 用于打通边缘侧巡检数据、后端持久化、告警生成、维
 - [配置](#配置)
 - [API 概览](#api-概览)
 - [契约文档](#契约文档)
+- [按任务找文件](#按任务找文件)
 - [开发检查](#开发检查)
+- [本地生成物边界](#本地生成物边界)
 - [仓库结构](#仓库结构)
 
 ## 系统架构
@@ -242,6 +244,25 @@ uv run python validate_dataset.py \
 
 任何临时新增字段、枚举或路由变更，都需要先同步更新相关契约文档，再让实现依赖它。
 
+## 按任务找文件
+
+当你知道要做什么、但不确定从哪里下手时，先看这张表：
+
+| 任务 | 先看这里 | 需要同步 |
+| --- | --- | --- |
+| 新增或修改后端 API 行为 | `backend/app/api/routes/`、`backend/app/services/` | `docs/openapi.yaml`、`docs/api-spec.md`、`docs/contracts.md` |
+| 修改后端配置或本地运行路径 | `backend/app/core/config.py`、`backend/.env.example` | `README.zh-CN.md`、`backend/README.md` |
+| 修改前端页面 | `web/src/pages/` | 响应结构变化时同步 `web/src/api/client.ts`、`web/src/types/contracts.ts` |
+| 修改前端通用 UI | `web/src/components/`、`web/src/styles/global.css`、`web/src/theme/` | 检查 `web/src/pages/` 里的现有使用点 |
+| 准备或校验数据集 | `training/prepare_dataset.py`、`training/validate_dataset.py` | `dataset/README.md`、`dataset/docs/` 报告 |
+| 训练或导出模型 | `training/train.py`、`training/export_onnx.py` | `training/README.md`、`dataset/docs/` 指标和交付说明 |
+| 整理边缘侧或 Atlas 交付物 | `model-deploy/` | `models/`、`docs/01-edge-atlas.md`、后端上传契约 |
+| 更新项目开发规则 | `.trellis/spec/`、`AGENTS.md` | 如果人类也需要知道，同步到对应 README 或 `docs/` |
+
+`models/` 是本地模型产物工作区；`model-deploy/` 是边缘侧交付工作区，
+用于部署脚本、类别/预处理元数据、冒烟 payload 和被忽略的部署产物。
+不要把 `models/` 下的候选模型直接当作 Atlas 交付模型，除非已经记录模型晋升决策并同步契约。
+
 ## 开发检查
 
 联调交付前建议至少执行：
@@ -266,6 +287,22 @@ uv run python validate_dataset.py \
 
 涉及文档和 API 契约变更时，还需要确认 [docs/openapi.yaml](docs/openapi.yaml) 能正常解析，并且与实际接口面保持一致。
 
+## 本地生成物边界
+
+仓库只提交源码、契约、脚本和轻量报告。运行状态和大体积产物保留在本地，
+并由 `.gitignore` 覆盖：
+
+| 路径 | 内容 | 重新生成方式 |
+| --- | --- | --- |
+| `backend/.venv/`、`training/.venv/` | Python 虚拟环境 | 在对应目录执行 `uv sync` |
+| `backend/data/`、`backend/uploads/`、`backend/reports/` | SQLite 数据库、上传证据、导出报告 | 后端运行或测试生成 |
+| `web/node_modules/`、`web/dist/` | 前端依赖和构建输出 | `bun install`、`bun run build` |
+| `dataset/raw/`、`dataset/processed/`、`dataset/downloads/`、`dataset/cache/` | 源数据归档、解压数据、YOLO 数据集、缓存 | `training/prepare_dataset.py` 和已记录的数据源 |
+| `training/runs/`、`runs/` | Ultralytics 和本地实验输出 | `training/train.py` |
+| `models/`、`models/artifacts/`、`model-deploy/artifacts/` | 权重、ONNX/OM、冒烟图片、生成 payload | 训练、导出和部署冒烟脚本 |
+
+不要通过手动编辑生成数据集或运行时文件来替代脚本更新。
+
 ## 仓库结构
 
 ```text
@@ -273,8 +310,11 @@ uv run python validate_dataset.py \
 ├── backend/              FastAPI 服务、API 路由、Pydantic 模型、SQLite 服务、测试
 ├── dataset/              本地数据集工作区、数据源说明和清洗报告
 ├── docs/                 契约、工程规范、模块文档、OpenAPI 规范
+├── model-deploy/         边缘侧/模型部署辅助脚本、元数据和忽略的冒烟产物
+├── models/               被忽略的本地模型产物和 artifact 占位目录
 ├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
 ├── web/                  React + Vite 仪表盘前端
+├── .trellis/             项目工作流、任务状态和编码规范
 ├── docker-compose.yml    后端部署脚手架
 ├── README.md             中文项目入口
 ├── README.en.md          英文项目入口

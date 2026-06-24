@@ -15,6 +15,24 @@
 - [数据契约与接口规范](./contracts.md)
 - [工程规范与联调标准](./engineering-standards.md)
 
+## 按任务找文档
+
+| 任务 | 先读 | 同步要求 |
+| --- | --- | --- |
+| 对接或修改 API | [API 端点规范](./api-spec.md)、[OpenAPI 机器可校验规范](./openapi.yaml) | 字段、状态码或路径变化时同步 [数据契约与接口规范](./contracts.md) |
+| 修改跨模块字段、枚举或响应包裹 | [数据契约与接口规范](./contracts.md) | 前端类型和后端 Pydantic 模型必须保持同一语义 |
+| 确认成员职责和交付边界 | [接口、数据流与交付边界](./interfaces-and-deliverables.md) | 涉及上下游输入输出时同步对应成员文档 |
+| 处理 Atlas/边缘侧推理 | [成员1：Atlas 开发板与边缘推理](./01-edge-atlas.md) | 模型交付物变化时同步 `model-deploy/` 和后端上传契约 |
+| 处理数据集、训练或模型指标 | [成员2：数据集与视觉目标检测](./02-vision-detection.md) | 同步 `dataset/README.md`、`dataset/docs/` 和 `training/README.md` |
+| 调整故障规则或维修建议 | [成员3：故障规则与大模型维修建议设计](./03-rules-advice.md) | 同步后端 advice/fault API 契约 |
+| 修改后端实现 | [成员4：后端、数据库、报告与大模型维修建议接口](./04-backend-api.md) | 同步 API 文档、OpenAPI 和根 README 的接口概览 |
+| 修改前端展示或联调测试 | [成员5：前端可视化、系统测试与答辩](./05-frontend-testing.md) | 同步前端契约类型和测试说明 |
+| 调整工程规则、运行命令或目录边界 | [工程规范与联调标准](./engineering-standards.md) | 必要时同步根 README 和 `AGENTS.md` |
+
+如果改动会影响人类联调，优先更新 `docs/`；如果改动只影响 agent 写代码习惯，
+优先更新 `.trellis/spec/` 或 `AGENTS.md`。两类读者都需要知道时，两边都要同步，
+但不要在 agent 规则文件里复制文档正文。
+
 ## 系统总体流程
 
 ```text

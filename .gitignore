@@ -37,6 +37,7 @@ dataset/artifacts/*
 model/
 models/*
 !models/.gitkeep
+!models/README.md
 !models/artifacts/
 models/artifacts/*
 !models/artifacts/.gitkeep

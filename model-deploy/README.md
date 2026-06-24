@@ -5,6 +5,27 @@ EdgeEye edge/model integration. Large model files, sample images, annotated
 images, and generated payloads live under `model-deploy/artifacts/` or
 `models/artifacts/` and are ignored by Git.
 
+## Directory Boundary
+
+Use `model-deploy/` for deploy-facing material:
+
+- bridge or smoke scripts that turn model output into the backend upload shape;
+- class labels, preprocessing metadata, expected output baselines, and payload
+  fixtures that describe the deployed contract;
+- ignored smoke-test inputs, annotated images, generated payloads, and temporary
+  deploy artifacts under `model-deploy/artifacts/`.
+
+Use `models/` for local model outputs and candidates:
+
+- training checkpoints and promoted `best.pt` files;
+- exported ONNX files and future OM files;
+- candidate-specific directories such as `edgeeye-insulator-v1-*`.
+
+A candidate under `models/` is not automatically the edge-delivered model.
+Promoting a candidate requires updating the class contract, preprocessing
+metadata, expected output baseline, backend upload assumptions, and the relevant
+docs before downstream users treat it as deployable.
+
 ## Transformer V1 ONNX Smoke
 
 Current temporary model contract:
