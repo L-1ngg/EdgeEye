@@ -24,7 +24,7 @@ export function DashboardPage({ dashboard, dataSource, system }: DashboardPagePr
           </div>
           <div className="heading-actions">
             <DataSourceBadge source={dataSource} />
-            <StatusPill status={dashboard.dataFreshness} />
+            {dashboard.dataFreshness === "fresh" ? null : <StatusPill status={dashboard.dataFreshness} />}
           </div>
         </div>
         <div className="metric-grid">

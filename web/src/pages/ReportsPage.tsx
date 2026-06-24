@@ -27,7 +27,7 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
       const exported = await exportReportPdf(report.reportId);
 
       if (!exported.downloadUrl) {
-        setExportError("后端没有返回 PDF 下载地址。");
+        setExportError("PDF 文件暂未生成，请稍后重试。");
         return;
       }
 
@@ -38,7 +38,7 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
       link.click();
       link.remove();
     } catch {
-      setExportError("PDF 导出请求失败，请确认后端导出接口可用。");
+      setExportError("PDF 导出失败，请稍后重试。");
     } finally {
       setExportingReportId(null);
     }

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
 import {
-  getAdvice,
+  generateAdvice,
   getAlarms,
   getDashboard,
   getDevices,
   getEvents,
+  getFaultAdvice,
   getFaults,
   getRealtimeSnapshot,
   getReports,
@@ -31,7 +32,7 @@ interface AppData {
   system: SystemOverview;
   snapshot: RealtimeSnapshot;
   events: EventItem[];
-  advice: RepairAdvice | null;
+  adviceByFaultId: Record<string, RepairAdvice | null>;
   reports: ReportSummary[];
   devices: Device[];
   faults: Fault[];
@@ -55,6 +56,8 @@ export function App() {
   const [activeView, setActiveView] = useState<ViewKey>(() => getViewFromLocation());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [appData, setAppData] = useState<AppData | null>(null);
+  const [adviceLoadingFaultId, setAdviceLoadingFaultId] = useState<string | null>(null);
+  const [adviceErrorByFaultId, setAdviceErrorByFaultId] = useState<Record<string, string | null>>({});
   const [dataSources, setDataSources] = useState<Record<ViewKey, DataSource>>({
     dashboard: "unavailable",
     realtime: "unavailable",
@@ -82,9 +85,6 @@ export function App() {
           getFaults(),
           getAlarms()
         ]);
-        const firstFaultId = eventResult.data[0]?.faultId;
-        const adviceResult = await getAdvice(firstFaultId);
-
         if (cancelled) {
           return;
         }
@@ -94,7 +94,7 @@ export function App() {
           system: systemResult.data,
           snapshot: snapshotResult.data,
           events: eventResult.data,
-          advice: adviceResult.data,
+          adviceByFaultId: {},
           reports: reportResult.data,
           devices: deviceResult.data,
           faults: faultResult.data,
@@ -103,7 +103,7 @@ export function App() {
         setDataSources({
           dashboard: "api",
           realtime: "api",
-          faults: adviceResult.source === "api" ? "api" : "unavailable",
+          faults: "api",
           reports: "api",
           assets: "api"
         });
@@ -206,7 +206,18 @@ export function App() {
       case "realtime":
         return <RealtimePage dataSource={dataSources.realtime} snapshot={appData.snapshot} />;
       case "faults":
-        return <FaultCenterPage advice={appData.advice} dataSource={dataSources.faults} events={appData.events} onUpdateStatus={handleUpdateStatus} />;
+        return (
+          <FaultCenterPage
+            adviceByFaultId={appData.adviceByFaultId}
+            adviceErrorByFaultId={adviceErrorByFaultId}
+            adviceLoadingFaultId={adviceLoadingFaultId}
+            dataSource={dataSources.faults}
+            events={appData.events}
+            onGenerateAdvice={handleGenerateAdvice}
+            onLoadAdvice={handleLoadAdvice}
+            onUpdateStatus={handleUpdateStatus}
+          />
+        );
       case "reports":
         return <ReportsPage dataSource={dataSources.reports} reports={appData.reports} />;
       case "assets":
@@ -252,6 +263,65 @@ export function App() {
           : currentData.alarms
       };
     });
+  }
+
+  async function handleLoadAdvice(faultId: string) {
+    if (appData?.adviceByFaultId[faultId] !== undefined || adviceLoadingFaultId === faultId) {
+      return;
+    }
+
+    setAdviceLoadingFaultId(faultId);
+    setAdviceErrorByFaultId((currentErrors) => ({ ...currentErrors, [faultId]: null }));
+
+    try {
+      const adviceResult = await getFaultAdvice(faultId);
+      setAppData((currentData) => {
+        if (!currentData) {
+          return currentData;
+        }
+
+        return {
+          ...currentData,
+          adviceByFaultId: {
+            ...currentData.adviceByFaultId,
+            [faultId]: adviceResult.data
+          }
+        };
+      });
+    } catch {
+      setAdviceErrorByFaultId((currentErrors) => ({ ...currentErrors, [faultId]: "维修建议读取失败，请稍后重试。" }));
+    } finally {
+      setAdviceLoadingFaultId((currentFaultId) => (currentFaultId === faultId ? null : currentFaultId));
+    }
+  }
+
+  async function handleGenerateAdvice(faultId: string) {
+    setAdviceLoadingFaultId(faultId);
+    setAdviceErrorByFaultId((currentErrors) => ({ ...currentErrors, [faultId]: null }));
+
+    try {
+      const advice = await generateAdvice(faultId);
+      setAppData((currentData) => {
+        if (!currentData) {
+          return currentData;
+        }
+
+        return {
+          ...currentData,
+          adviceByFaultId: {
+            ...currentData.adviceByFaultId,
+            [faultId]: advice
+          },
+          events: currentData.events.map((event) =>
+            event.faultId === faultId ? { ...event, adviceStatus: advice.adviceStatus } : event
+          )
+        };
+      });
+    } catch {
+      setAdviceErrorByFaultId((currentErrors) => ({ ...currentErrors, [faultId]: "维修建议生成失败，请稍后重试。" }));
+    } finally {
+      setAdviceLoadingFaultId((currentFaultId) => (currentFaultId === faultId ? null : currentFaultId));
+    }
   }
 
   function handleLogout() {
@@ -356,8 +426,8 @@ export function App() {
           </div>
           <div className="topbar-actions">
             <div className="api-mode">
-              <Icon name={!activeDataSource ? "activity" : activeDataSource === "api" ? "api" : "bug"} size={14} />
-              {!activeDataSource ? "连接中" : activeDataSource === "api" ? "API 已连接" : "接口不可用"}
+              <Icon name={!activeDataSource ? "activity" : activeDataSource === "api" ? "activity" : "alert-triangle"} size={14} />
+              {!activeDataSource ? "连接中" : activeDataSource === "api" ? "系统已连接" : "后台服务暂不可用"}
             </div>
             <button
               aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
@@ -399,7 +469,7 @@ function LoadingPage() {
               <Icon name="activity" size={18} />
               正在连接数据
             </h2>
-            <p>正在读取后端 API。</p>
+            <p>正在同步巡检数据。</p>
           </div>
         </div>
         <div className="loading-state" aria-live="polite" aria-label="正在加载系统数据">
@@ -435,7 +505,7 @@ function createEmptyAppData(): AppData {
         status: "offline",
         lastFrameAt: null,
         lastHeartbeatAt: null,
-        message: "接口不可用",
+        message: "服务暂不可用",
         degradedReason: null
       },
       atlas: {
@@ -444,7 +514,7 @@ function createEmptyAppData(): AppData {
         memoryUsage: 0,
         npuUsage: null,
         lastHeartbeatAt: null,
-        message: "接口不可用",
+        message: "服务暂不可用",
         degradedReason: null
       },
       model: {
@@ -453,13 +523,13 @@ function createEmptyAppData(): AppData {
         fps: 0,
         latencyMs: 0,
         lastHeartbeatAt: null,
-        message: "接口不可用",
+        message: "服务暂不可用",
         degradedReason: null
       },
       backend: {
         status: "offline",
         lastHeartbeatAt: null,
-        message: "后端 API 未连接",
+        message: "后台服务未连接",
         degradedReason: null
       },
       updatedAt: now,
@@ -469,8 +539,8 @@ function createEmptyAppData(): AppData {
       unresolvedAlarmCount: 0
     },
     snapshot: createEmptySnapshot(),
-    events: [],
-    advice: null,
+      events: [],
+      adviceByFaultId: {},
     reports: [],
     devices: [],
     faults: [],

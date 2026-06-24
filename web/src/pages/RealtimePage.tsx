@@ -25,11 +25,14 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
   const streamSource = streamRetryToken === 0 ? baseStreamSource : `${baseStreamSource}?retry=${streamRetryToken}`;
   const hasStreamSource = baseStreamSource.length > 0;
   const canDisplayStream = frameLoadState === "loaded";
-  const canDisplayMetadata = hasResultFrame;
-  const canOverlayDetections = hasResultFrame && canDisplayStream;
+  const canDisplayRealtimeMetadata = hasResultFrame && canDisplayStream && snapshot.resultStatus === "ready";
+  const canDisplayLastKnownMetadata = hasResultFrame && !canDisplayRealtimeMetadata;
+  const canDisplayMetadata = canDisplayRealtimeMetadata || canDisplayLastKnownMetadata;
+  const canOverlayDetections = canDisplayRealtimeMetadata;
   const shouldShowFrameFallback = !canDisplayStream;
   const averageConfidence = getAverageConfidence(snapshot.detections);
   const primaryDetection = snapshot.detections[0] ?? null;
+  const metadataScope = canDisplayRealtimeMetadata ? "实时" : "最近一次";
 
   useEffect(() => {
     setFrameLoadState("loading");
@@ -113,8 +116,8 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <span className={`live-dot live-dot--${canDisplayStream ? "good" : "warning"}`} aria-hidden="true" />
               {getStreamTagText(frameLoadState)}
             </div>
-            {snapshot.resultStatus === "stale" && canOverlayDetections ? (
-              <div className="canvas-alert">实时结果已过期，当前显示最后一帧。</div>
+            {canDisplayLastKnownMetadata && canDisplayStream ? (
+              <div className="canvas-alert">识别结果非实时，下方显示最近一次检测记录。</div>
             ) : null}
           </div>
 
@@ -130,11 +133,23 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
 
       {canDisplayMetadata ? (
         <>
+          {canDisplayLastKnownMetadata ? (
+            <section className="last-known-result-banner" aria-live="polite">
+              <span className="last-known-result-banner__icon" aria-hidden="true">
+                <Icon name="alert-triangle" size={20} />
+              </span>
+              <div>
+                <strong>当前不是实时识别数据</strong>
+                <span>{getLastKnownResultMessage(frameLoadState, snapshot)}</span>
+              </div>
+            </section>
+          ) : null}
+
           <section className="metric-grid realtime-summary-grid">
-            <MetricCard label="YOLO 目标数" value={snapshot.detections.length} tone={snapshot.detections.length > 0 ? "warning" : "good"} />
-            <MetricCard label="平均置信度" value={averageConfidence === null ? "N/A" : `${averageConfidence}%`} tone={averageConfidence !== null && averageConfidence >= 85 ? "warning" : "neutral"} />
-            <MetricCard label="推理延迟" value={`${snapshot.performance.latencyMs}ms`} detail="边缘端模型耗时" />
-            <MetricCard label="视频帧率" value={`${snapshot.performance.fps} FPS`} detail={snapshot.isKeyFrame ? "关键帧上传" : "普通帧采样"} />
+            <MetricCard label={`${metadataScope} YOLO 目标数`} value={snapshot.detections.length} tone={snapshot.detections.length > 0 ? "warning" : "good"} />
+            <MetricCard label={`${metadataScope}平均置信度`} value={averageConfidence === null ? "N/A" : `${averageConfidence}%`} tone={averageConfidence !== null && averageConfidence >= 85 ? "warning" : "neutral"} />
+            <MetricCard label={`${metadataScope}推理延迟`} value={`${snapshot.performance.latencyMs}ms`} detail="边缘端模型耗时" />
+            <MetricCard label={`${metadataScope}视频帧率`} value={`${snapshot.performance.fps} FPS`} detail={snapshot.isKeyFrame ? "关键帧上传" : "普通帧采样"} />
           </section>
 
           <section className="panel">
@@ -142,9 +157,9 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <div>
                 <h2>
                   <Icon name="layers" size={18} />
-                  YOLO 识别结果
+                  {canDisplayRealtimeMetadata ? "YOLO 识别结果" : "最近一次 YOLO 识别结果"}
                 </h2>
-                <p>{snapshot.detections.length > 0 ? "按当前帧检测目标展示" : "当前帧没有检测目标"}</p>
+                <p>{getDetectionPanelDescription(canDisplayRealtimeMetadata, snapshot.detections.length)}</p>
               </div>
               {primaryDetection ? <StatusPill status={primaryDetection.faultType ? "warning" : "ready"} /> : <StatusPill status="ready" />}
             </div>
@@ -171,7 +186,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
                 ))}
               </div>
             ) : (
-              <div className="empty-state">当前画面未识别到目标或故障特征。</div>
+              <div className="empty-state">{canDisplayRealtimeMetadata ? "当前画面未识别到目标或故障特征。" : "最近一次检测未识别到目标或故障特征。"}</div>
             )}
           </section>
 
@@ -180,7 +195,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <div className="panel-heading">
                 <h2>
                   <Icon name="cpu" size={18} />
-                  边缘推理性能
+                  {canDisplayRealtimeMetadata ? "边缘推理性能" : "最近一次边缘推理性能"}
                 </h2>
                 <StatusPill status={snapshot.inspectionStatus} />
               </div>
@@ -196,7 +211,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <div className="panel-heading">
                 <h2>
                   <Icon name="camera" size={18} />
-                  帧与采集信息
+                  {canDisplayRealtimeMetadata ? "帧与采集信息" : "最近一次帧与采集信息"}
                 </h2>
                 <span>{snapshot.frameId ?? "尚无帧"}</span>
               </div>
@@ -205,7 +220,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
                 <InfoRow label="接收时间" value={formatTime(snapshot.receivedAt ?? snapshot.timestamp)} />
                 <InfoRow label="上传原因" value={snapshot.uploadReason} />
                 <InfoRow label="关键帧" value={snapshot.isKeyFrame ? "是" : "否"} />
-                <InfoRow label="新鲜度窗口" value={snapshot.staleAfterMs ? `${snapshot.staleAfterMs}ms` : "N/A"} />
+                <InfoRow label="有效时间窗口" value={snapshot.staleAfterMs ? `${snapshot.staleAfterMs}ms` : "N/A"} />
               </div>
             </section>
 
@@ -213,7 +228,7 @@ export function RealtimePage({ dataSource, snapshot }: RealtimePageProps) {
               <div className="panel-heading">
                 <h2>
                   <Icon name="activity" size={18} />
-                  事件链路
+                  {canDisplayRealtimeMetadata ? "事件链路" : "最近一次事件链路"}
                 </h2>
                 <StatusPill status={snapshot.eventStatus ?? "none"} />
               </div>
@@ -357,7 +372,7 @@ function getRealtimeStateMessage(status: ResultStatus) {
     case "failed":
       return "当前巡检结果生成失败，需要检查摄像头、边缘端或模型状态。";
     case "stale":
-      return "数据已超过新鲜度窗口。";
+      return "检测结果已过期。";
     case "ready":
       return "实时结果可展示。";
     default:
@@ -371,14 +386,14 @@ function getFrameFallbackMessage(hasFrameSource: boolean, status: ResultStatus, 
   }
 
   if (!hasFrameSource) {
-    return "后端尚未返回可展示的摄像头画面地址。";
+    return "暂未获得可展示的摄像头画面。";
   }
 
   if (status === "stale") {
-    return "最后一帧地址无法加载，请检查静态文件或流服务。";
+    return "最近一次画面无法加载，请检查边缘端采集状态。";
   }
 
-  return "摄像头画面加载失败，请检查边缘端推流、上传路径或后端静态资源。";
+  return "摄像头画面加载失败，请检查边缘端采集状态。";
 }
 
 function getFrameDataUnavailableMessage(hasFrameSource: boolean, status: ResultStatus, frameLoadState: FrameLoadState) {
@@ -387,6 +402,28 @@ function getFrameDataUnavailableMessage(hasFrameSource: boolean, status: ResultS
   }
 
   return getFrameFallbackMessage(hasFrameSource, status, frameLoadState);
+}
+
+function getLastKnownResultMessage(frameLoadState: FrameLoadState, snapshot: RealtimeSnapshot) {
+  const receivedAt = formatTime(snapshot.receivedAt ?? snapshot.timestamp);
+
+  if (frameLoadState !== "loaded") {
+    return `摄像头实时画面不可用，下面保留最近一次检测记录，接收时间 ${receivedAt}。`;
+  }
+
+  if (snapshot.resultStatus === "stale") {
+    return `检测结果已超过 ${snapshot.staleAfterMs ?? 3000}ms 有效时间窗口，下面保留最近一次检测记录，接收时间 ${receivedAt}。`;
+  }
+
+  return `下面保留最近一次检测记录，接收时间 ${receivedAt}。`;
+}
+
+function getDetectionPanelDescription(isRealtime: boolean, detectionCount: number) {
+  if (isRealtime) {
+    return detectionCount > 0 ? "按当前帧检测目标展示" : "当前帧没有检测目标";
+  }
+
+  return detectionCount > 0 ? "按最近一次检测记录展示" : "最近一次检测记录没有检测目标";
 }
 
 function formatBbox(bbox: [number, number, number, number]) {

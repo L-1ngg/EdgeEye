@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DataSourceBadge } from "../components/DataSourceBadge";
 import { Icon } from "../components/Icon";
@@ -6,9 +6,13 @@ import { StatusPill } from "../components/StatusPill";
 import type { DataSource, EventItem, ProcessStatus, RepairAdvice } from "../types/contracts";
 
 interface FaultCenterPageProps {
-  advice: RepairAdvice | null;
+  adviceByFaultId: Record<string, RepairAdvice | null>;
+  adviceErrorByFaultId: Record<string, string | null>;
+  adviceLoadingFaultId: string | null;
   dataSource: DataSource;
   events: EventItem[];
+  onGenerateAdvice: (faultId: string) => Promise<void>;
+  onLoadAdvice: (faultId: string) => Promise<void>;
   onUpdateStatus: (event: EventItem, processStatus: ProcessStatus) => Promise<void>;
 }
 
@@ -18,13 +22,45 @@ const processActions: Array<{ label: string; status: ProcessStatus }> = [
   { label: "忽略", status: "ignored" }
 ];
 
-export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: FaultCenterPageProps) {
+type EvidenceLoadState = "idle" | "loaded" | "failed";
+
+export function FaultCenterPage({
+  adviceByFaultId,
+  adviceErrorByFaultId,
+  adviceLoadingFaultId,
+  dataSource,
+  events,
+  onGenerateAdvice,
+  onLoadAdvice,
+  onUpdateStatus
+}: FaultCenterPageProps) {
   const defaultEventId = useMemo(() => events[0]?.eventId ?? null, [events]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(defaultEventId);
   const [updatingStatus, setUpdatingStatus] = useState<ProcessStatus | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [generatingAdvice, setGeneratingAdvice] = useState(false);
+  const [evidenceLoadState, setEvidenceLoadState] = useState<EvidenceLoadState>("idle");
   const selectedEvent = events.find((event) => event.eventId === selectedEventId) ?? events[0] ?? null;
+  const selectedFaultId = selectedEvent?.faultId ?? null;
+  const advice = selectedFaultId ? adviceByFaultId[selectedFaultId] ?? null : null;
+  const adviceError = selectedFaultId ? adviceErrorByFaultId[selectedFaultId] : null;
+  const isAdviceLoading = Boolean(selectedFaultId && adviceLoadingFaultId === selectedFaultId);
+  const adviceStatus = advice?.adviceStatus ?? selectedEvent?.adviceStatus ?? "none";
   const unresolvedCount = events.filter((event) => event.processStatus !== "resolved").length;
+  const evidenceImageUrl = selectedEvent?.latestImageUrl ?? "";
+  const shouldShowEvidenceImage = evidenceImageUrl.length > 0 && evidenceLoadState !== "failed";
+
+  useEffect(() => {
+    if (!selectedFaultId) {
+      return;
+    }
+
+    void onLoadAdvice(selectedFaultId);
+  }, [onLoadAdvice, selectedFaultId]);
+
+  useEffect(() => {
+    setEvidenceLoadState(evidenceImageUrl ? "idle" : "failed");
+  }, [evidenceImageUrl]);
 
   async function handleProcessAction(processStatus: ProcessStatus) {
     if (!selectedEvent) {
@@ -37,9 +73,23 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
     try {
       await onUpdateStatus(selectedEvent, processStatus);
     } catch {
-      setActionError("状态更新失败，请确认后端接口可用。");
+      setActionError("状态更新失败，请稍后重试。");
     } finally {
       setUpdatingStatus(null);
+    }
+  }
+
+  async function handleGenerateAdvice() {
+    if (!selectedFaultId) {
+      return;
+    }
+
+    setGeneratingAdvice(true);
+
+    try {
+      await onGenerateAdvice(selectedFaultId);
+    } finally {
+      setGeneratingAdvice(false);
     }
   }
 
@@ -87,7 +137,7 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
             <h2><Icon name="shield" size={18} />维修建议</h2>
             <p>{selectedEvent?.deviceName ?? "暂无事件"}</p>
           </div>
-          <StatusPill status={selectedEvent?.adviceStatus ?? "none"} />
+          <StatusPill status={adviceStatus} />
         </div>
         {selectedEvent ? (
           <div className="detail-stack">
@@ -96,7 +146,7 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
             <div className="mini-grid">
               <span>故障：{selectedEvent.faultType}</span>
               <span>告警：{selectedEvent.alarmLevel ?? "未触发告警"}</span>
-              <span>来源：{advice?.modelName ?? "暂无建议"}</span>
+              <span>建议：{getAdviceSummary(adviceStatus, advice)}</span>
               <span>次数：{selectedEvent.occurrenceCount}</span>
             </div>
             <div className="process-actions" aria-label="故障处理操作">
@@ -116,6 +166,26 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
               操作员：admin{selectedEvent.lastHandledBy ? ` / 最近处理：${selectedEvent.lastHandledBy}` : ""}
             </small>
             {actionError ? <p className="form-error">{actionError}</p> : null}
+            {adviceError ? <p className="form-error">{adviceError}</p> : null}
+            <div className="fault-evidence">
+              <div className="fault-evidence__header">
+                <strong>故障证据图</strong>
+                <span>{selectedEvent.latestFrameId}</span>
+              </div>
+              {shouldShowEvidenceImage ? (
+                <figure className="fault-evidence__figure">
+                  <img
+                    alt={`${selectedEvent.title} 的故障证据图`}
+                    onError={() => setEvidenceLoadState("failed")}
+                    onLoad={() => setEvidenceLoadState("loaded")}
+                    src={evidenceImageUrl}
+                  />
+                  {evidenceLoadState !== "loaded" ? <span className="fault-evidence__loading">正在加载证据图</span> : null}
+                </figure>
+              ) : (
+                <p className="empty-state">当前故障暂无可查看的证据图。</p>
+              )}
+            </div>
             {advice ? (
               <>
                 <strong>风险分析</strong>
@@ -139,8 +209,20 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
                   ))}
                 </ul>
               </>
+            ) : isAdviceLoading ? (
+              <p className="empty-state">正在读取维修建议。</p>
             ) : (
-              <p className="empty-state">暂无维修建议，请确认建议接口或后端生成任务是否可用。</p>
+              <div className="advice-empty-state">
+                <p className="empty-state">当前故障还没有维修建议。</p>
+                <button
+                  className="small-action small-action--primary"
+                  disabled={generatingAdvice}
+                  onClick={() => void handleGenerateAdvice()}
+                  type="button"
+                >
+                  {generatingAdvice ? "生成中" : "生成维修建议"}
+                </button>
+              </div>
             )}
           </div>
         ) : (
@@ -149,6 +231,22 @@ export function FaultCenterPage({ advice, dataSource, events, onUpdateStatus }: 
       </section>
     </div>
   );
+}
+
+function getAdviceSummary(status: string, advice: RepairAdvice | null) {
+  if (advice) {
+    return status === "fallback" ? "规则建议" : "已生成";
+  }
+
+  if (status === "generating") {
+    return "生成中";
+  }
+
+  if (status === "failed") {
+    return "生成失败";
+  }
+
+  return "待生成";
 }
 
 function formatTime(value: string) {

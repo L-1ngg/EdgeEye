@@ -6,11 +6,14 @@ interface DataSourceBadgeProps {
 }
 
 export function DataSourceBadge({ source }: DataSourceBadgeProps) {
-  const isApi = source === "api";
+  if (source === "api") {
+    return null;
+  }
+
   return (
     <span className={`source-badge source-badge--${source}`}>
-      <Icon name={isApi ? "api" : "bug"} size={14} />
-      {isApi ? "API 数据" : "接口不可用"}
+      <Icon name="alert-triangle" size={14} />
+      数据暂不可用
     </span>
   );
 }

@@ -111,7 +111,7 @@ export async function getAlarms(): Promise<DataResult<Alarm[]>> {
   return getApiData(() => getPageItems<Alarm>("/alarms"));
 }
 
-export async function getAdvice(faultId: string | null | undefined): Promise<DataResult<RepairAdvice | null>> {
+export async function getFaultAdvice(faultId: string | null | undefined): Promise<DataResult<RepairAdvice | null>> {
   if (!faultId) {
     return { data: null, source: "api" };
   }
@@ -119,12 +119,12 @@ export async function getAdvice(faultId: string | null | undefined): Promise<Dat
   try {
     return { data: await getJson<RepairAdvice>(`/faults/${faultId}/advice`), source: "api" };
   } catch {
-    try {
-      return { data: await postJson<RepairAdvice>("/advice/generate", { faultId }), source: "api" };
-    } catch {
-      return { data: null, source: "unavailable" };
-    }
+    return { data: null, source: "unavailable" };
   }
+}
+
+export async function generateAdvice(faultId: string): Promise<RepairAdvice> {
+  return postJson<RepairAdvice>("/advice/generate", { faultId });
 }
 
 export async function updateFaultStatus(

@@ -10,7 +10,7 @@ const statusLabels: Record<string, string> = {
   degraded: "降级",
   error: "错误",
   unknown: "未知",
-  fresh: "新鲜",
+  fresh: "正常",
   stale: "过期",
   pending: "待处理",
   running: "运行中",
