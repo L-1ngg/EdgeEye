@@ -1556,6 +1556,16 @@ button.event-row:hover {
   color: var(--text-muted);
 }
 
+.report-table__status {
+  display: inline-flex;
+  justify-self: start;
+  width: fit-content;
+}
+
+.report-table__status .status-pill {
+  min-width: auto;
+}
+
 .table-action {
   display: inline-flex;
   align-items: center;

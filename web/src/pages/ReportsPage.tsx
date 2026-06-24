@@ -83,7 +83,9 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
                 </div>
                 <span>{report.inspectionId}</span>
                 <span>{report.format.toUpperCase()}</span>
-                <StatusPill status={report.reportStatus} />
+                <span className="report-table__status">
+                  <StatusPill status={report.reportStatus} />
+                </span>
                 {report.reportStatus === "ready" ? (
                   <button className="table-action" onClick={() => void handleExportPdf(report)} type="button">
                     <Icon name="download" size={14} />
