@@ -49,3 +49,7 @@ fusion_result.json
 *.pt
 *.onnx
 *.om
+
+#报告
+报告/
+报告/*
