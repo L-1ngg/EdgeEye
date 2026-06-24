@@ -402,3 +402,36 @@ Pulled latest main, fixed realtime page stream recovery so MJPEG failures retry 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: DeepSeek repair advice provider
+
+**Date**: 2026-06-24
+**Task**: DeepSeek repair advice provider
+**Branch**: `main`
+
+### Summary
+
+Added DeepSeek official chat-completions support for persisted Chinese repair advice, documented local env configuration, and verified backend provider success/fallback paths.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9278a27` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
