@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import settings
@@ -42,11 +43,25 @@ RULE_VERSION = "builtin-2026-06-17"
 RISK_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-pro"
-PDF_MAX_TEXT_UNITS = 54
-PDF_LINES_PER_PAGE = 41
-PDF_LINE_HEIGHT = 16
+PDF_PAGE_WIDTH = 612
+PDF_PAGE_HEIGHT = 792
 PDF_LEFT_MARGIN = 72
+PDF_RIGHT_MARGIN = 72
+PDF_PRINTABLE_WIDTH = PDF_PAGE_WIDTH - PDF_LEFT_MARGIN - PDF_RIGHT_MARGIN
+PDF_WRAP_BUDGET_PT = PDF_PRINTABLE_WIDTH - 8
+PDF_LINE_HEIGHT = 16
 PDF_TOP_MARGIN = 760
+PDF_FOOTER_Y = 36
+PDF_FONT_FULL = 10
+PDF_FONT_TITLE = 18
+PDF_FONT_HEADING = 13
+PDF_FONT_FOOTER = 8
+PDF_COLOR_TITLE = (0.13, 0.20, 0.45)
+PDF_COLOR_HEADING = (0.20, 0.40, 0.80)
+PDF_COLOR_BODY = (0.12, 0.14, 0.20)
+PDF_COLOR_MUTED = (0.45, 0.50, 0.58)
+PDF_COLOR_RULE = (0.66, 0.70, 0.76)
+PDF_COLOR_DANGER = (0.80, 0.20, 0.20)
 FAULT_LABELS = {
     "surface_damage": "表面破损",
     "rust": "锈蚀",
@@ -90,6 +105,18 @@ ADVICE_STATUS_LABELS = {
     "fallback": "规则模板",
     "failed": "生成失败",
 }
+
+
+@dataclass
+class _PdfItem:
+    """A single renderable element in the PDF layout stream."""
+
+    kind: str  # "text" | "rule" | "spacer"
+    text: str = ""
+    size: int = PDF_FONT_FULL
+    color: tuple[float, float, float] = PDF_COLOR_BODY
+    indent: int = 0
+    height: int = PDF_LINE_HEIGHT
 
 
 def current_timestamp() -> datetime:
@@ -1145,7 +1172,7 @@ class InspectionService:
                 (inspection_id,),
             ).fetchall()
         }
-        primary_fault = faults[0] if faults else None
+        primary_fault = self._primary_fault(faults)
         device_name = self._device_display_name(device)
         location = self._location_display_name(device["location"])
         title = (
@@ -1263,30 +1290,14 @@ class InspectionService:
         (self._reports_dir() / file_name).write_text(html_content, encoding="utf-8")
 
     def _write_pdf_report(self, report: dict[str, Any], file_name: str) -> None:
-        title = str(report["title"])
-        summary = str(report["summary"])
-        lines = [
-            title,
-            summary,
-            f"报告编号：{report['report_id']}",
-            f"巡检编号：{report['inspection_id']}",
-            "",
-            "一、巡检结论",
-            f"{report['conclusion']['priority']}：{report['conclusion']['finding']}",
-            report["conclusion"]["action"],
-            report["conclusion"]["alarmSummary"],
-            f"最高风险：{report['highestRiskLabel']} / 故障数量：{report['faultCount']} / 告警数量：{report['alarmCount']} / 高风险及以上：{report['highRiskCount']}",
-            "",
-            "二、巡检对象",
-            f"设备：{report['deviceName']} / 位置：{report['location']}",
-            f"开始时间：{self._report_time(report['startedAt'])} / 结束时间：{self._report_time(report['endedAt'])}",
-            "",
-            "三、故障发现与处置建议",
+        items = self._build_pdf_items(report)
+        pages = self._layout_pdf_pages(items)
+        total_pages = len(pages)
+        report_id = str(report["report_id"])
+        streams = [
+            self._pdf_page_stream(page, page_no=index + 1, total_pages=total_pages, report_id=report_id)
+            for index, page in enumerate(pages)
         ]
-        for fault in report["faults"]:
-            lines.extend(self._pdf_fault_lines(fault))
-        pages = self._paginate_pdf_lines(lines)
-        streams = [self._pdf_page_stream(page_lines) for page_lines in pages]
         page_object_ids = [6 + index * 2 for index in range(len(streams))]
         content_object_ids = [page_object_id + 1 for page_object_id in page_object_ids]
         kids = " ".join(f"{page_object_id} 0 R" for page_object_id in page_object_ids).encode("ascii")
@@ -1300,7 +1311,7 @@ class InspectionService:
         for page_object_id, content_object_id, stream in zip(page_object_ids, content_object_ids, streams):
             objects.append(
                 (
-                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PDF_PAGE_WIDTH} {PDF_PAGE_HEIGHT}] "
                     f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_object_id} 0 R >>"
                 ).encode("ascii")
             )
@@ -1324,46 +1335,179 @@ class InspectionService:
         )
         (self._reports_dir() / file_name).write_bytes(bytes(pdf))
 
-    def _paginate_pdf_lines(self, lines: list[str]) -> list[list[str]]:
-        pages: list[list[str]] = [[]]
-        for line in lines:
-            wrapped_lines = self._wrap_pdf_text(line)
-            for visual_line in wrapped_lines:
-                if len(pages[-1]) >= PDF_LINES_PER_PAGE:
+    def _build_pdf_items(self, report: dict[str, Any]) -> list[_PdfItem]:
+        conclusion = report["conclusion"]
+        priority_color = PDF_COLOR_DANGER if conclusion["priority"] == "优先处置" else PDF_COLOR_BODY
+        items: list[_PdfItem] = [
+            _PdfItem("text", str(report["title"]), PDF_FONT_TITLE, PDF_COLOR_TITLE, 0, 26),
+            _PdfItem("text", str(report["summary"]), PDF_FONT_FULL, PDF_COLOR_MUTED, 0, 18),
+            _PdfItem(
+                "text",
+                f"报告编号：{report['report_id']}    巡检编号：{report['inspection_id']}",
+                PDF_FONT_FOOTER,
+                PDF_COLOR_MUTED,
+            ),
+            _PdfItem("rule", height=10),
+            _PdfItem("text", "一、巡检结论", PDF_FONT_HEADING, PDF_COLOR_HEADING, 0, 22),
+            _PdfItem("text", f"{conclusion['priority']}：{conclusion['finding']}", PDF_FONT_FULL, priority_color),
+            _PdfItem("text", conclusion["action"]),
+            _PdfItem("text", conclusion["alarmSummary"], color=PDF_COLOR_MUTED),
+            _PdfItem(
+                "text",
+                f"最高风险：{report['highestRiskLabel']}    故障：{report['faultCount']}    "
+                f"告警：{report['alarmCount']}    高风险及以上：{report['highRiskCount']}",
+            ),
+            _PdfItem("spacer", height=8),
+            _PdfItem("text", "二、巡检对象", PDF_FONT_HEADING, PDF_COLOR_HEADING, 0, 22),
+            _PdfItem("text", f"设备：{report['deviceName']}"),
+            _PdfItem("text", f"位置：{report['location']}"),
+            _PdfItem(
+                "text",
+                f"开始时间：{self._report_time(report['startedAt'])}    "
+                f"结束时间：{self._report_time(report['endedAt'])}",
+            ),
+            _PdfItem("spacer", height=8),
+            _PdfItem("text", "三、故障发现与处置建议", PDF_FONT_HEADING, PDF_COLOR_HEADING, 0, 22),
+        ]
+        if not report["faults"]:
+            items.append(_PdfItem("text", "本次巡检未发现故障。", PDF_FONT_FULL, PDF_COLOR_MUTED))
+        for index, fault in enumerate(report["faults"]):
+            if index > 0:
+                items.append(_PdfItem("rule", height=10))
+            items.extend(self._pdf_fault_items(fault))
+        return items
+
+    def _pdf_fault_items(self, fault: dict[str, Any]) -> list[_PdfItem]:
+        items: list[_PdfItem] = [
+            _PdfItem("text", fault["title"], PDF_FONT_HEADING, PDF_COLOR_HEADING, 0, 22),
+            _PdfItem(
+                "text",
+                f"发现情况：识别到{fault['faultTypeLabel']}，风险等级为{fault['riskLabel']}，"
+                f"模型置信度 {fault['confidence']:.0%}。",
+            ),
+            _PdfItem("text", f"累计出现 {fault['occurrenceCount']} 次，证据帧参考：{fault['bestFrameId']}"),
+            _PdfItem(
+                "text",
+                f"告警与状态：{fault['alarmMessage']} / 告警状态：{fault['alarmStatusLabel']} / "
+                f"故障状态：{fault['processStatusLabel']}",
+            ),
+            _PdfItem(
+                "text",
+                f"状态跟踪：最近处理人 {fault['lastHandledBy']}，"
+                f"最近处理时间 {self._report_time(fault['lastHandledAt'])}",
+                color=PDF_COLOR_MUTED,
+            ),
+        ]
+        advice = fault["advice"]
+        if not advice:
+            items.append(_PdfItem("text", "维修建议：尚未生成", PDF_FONT_FULL, PDF_COLOR_MUTED))
+            return items
+        items.extend(
+            [
+                _PdfItem("text", f"风险分析：{advice['riskAnalysis']}"),
+                _PdfItem("text", "检查步骤：" + "；".join(advice["inspectionSteps"])),
+                _PdfItem("text", "维修建议：" + "；".join(advice["maintenanceSuggestions"])),
+                _PdfItem("text", "安全注意事项：" + "；".join(advice["safetyNotes"])),
+            ]
+        )
+        advice_meta = [value for key in ("modelName", "adviceStatusLabel") if (value := advice.get(key))]
+        if advice_meta:
+            items.append(_PdfItem("text", "建议来源：" + " / ".join(advice_meta), PDF_FONT_FOOTER, PDF_COLOR_MUTED))
+        return items
+
+    def _layout_pdf_pages(self, items: list[_PdfItem]) -> list[list[_PdfItem]]:
+        pages: list[list[_PdfItem]] = [[]]
+        used = 0
+        available = PDF_TOP_MARGIN - PDF_FOOTER_Y - 24
+        for item in items:
+            pieces: list[_PdfItem] = []
+            if item.kind == "text":
+                budget = PDF_WRAP_BUDGET_PT - item.indent
+                for wrapped in self._wrap_pdf_text(item.text, budget):
+                    pieces.append(_PdfItem("text", wrapped, item.size, item.color, item.indent, item.height))
+            else:
+                pieces.append(item)
+            for piece in pieces:
+                if piece.kind in {"rule", "spacer"} and not pages[-1]:
+                    continue
+                if used and used + piece.height > available:
                     pages.append([])
-                pages[-1].append(visual_line)
+                    used = 0
+                    if piece.kind in {"rule", "spacer"}:
+                        continue
+                pages[-1].append(piece)
+                used += piece.height
         return pages
 
-    def _pdf_page_stream(self, lines: list[str]) -> bytes:
-        text_commands = ["BT", "/F1 10 Tf"]
-        for index, line in enumerate(lines):
-            y = PDF_TOP_MARGIN - (index * PDF_LINE_HEIGHT)
-            text_commands.append(f"1 0 0 1 {PDF_LEFT_MARGIN} {y} Tm")
-            text_commands.append(f"<{self._pdf_hex_text(line)}> Tj")
-        text_commands.append("ET")
-        return "\n".join(text_commands).encode("ascii")
+    def _pdf_page_stream(
+        self,
+        items: list[_PdfItem],
+        *,
+        page_no: int,
+        total_pages: int,
+        report_id: str,
+    ) -> bytes:
+        ops: list[str] = []
+        y = PDF_TOP_MARGIN
+        for item in items:
+            if item.kind == "spacer":
+                y -= item.height
+                continue
+            if item.kind == "rule":
+                r, g, b = PDF_COLOR_RULE
+                x = PDF_LEFT_MARGIN + item.indent
+                ops.append(
+                    f"{r:.3f} {g:.3f} {b:.3f} RG 1 w "
+                    f"{x:.2f} {y - item.height / 2:.2f} {PDF_PRINTABLE_WIDTH - item.indent:.2f} 0 re S "
+                    f"0 0 0 RG"
+                )
+                y -= item.height
+                continue
+            r, g, b = item.color
+            x = PDF_LEFT_MARGIN + item.indent
+            baseline = y - item.size
+            ops.append(
+                f"BT {r:.3f} {g:.3f} {b:.3f} rg /F1 {item.size} Tf "
+                f"1 0 0 1 {x:.2f} {baseline:.2f} Tm <{self._pdf_hex_text(item.text)}> Tj ET"
+            )
+            y -= item.height
+        footer = f"{report_id}  ·  第 {page_no} 页 / 共 {total_pages} 页"
+        r, g, b = PDF_COLOR_MUTED
+        ops.append(
+            f"BT {r:.3f} {g:.3f} {b:.3f} rg /F1 {PDF_FONT_FOOTER} Tf "
+            f"1 0 0 1 {PDF_LEFT_MARGIN:.2f} {PDF_FOOTER_Y:.2f} Tm <{self._pdf_hex_text(footer)}> Tj ET"
+        )
+        return "\n".join(ops).encode("ascii")
 
-    def _wrap_pdf_text(self, value: str, max_units: int = PDF_MAX_TEXT_UNITS) -> list[str]:
+    def _wrap_pdf_text(self, value: str, budget: int = PDF_WRAP_BUDGET_PT) -> list[str]:
         if value == "":
             return [""]
         lines: list[str] = []
-        current = ""
-        current_units = 0
-        for char in value:
-            char_units = self._pdf_text_units(char)
-            if current and current_units + char_units > max_units:
-                lines.append(current)
-                current = char
-                current_units = char_units
-            else:
-                current += char
-                current_units += char_units
-        if current:
-            lines.append(current)
-        return lines
+        for segment in value.split("\n"):
+            if not segment:
+                lines.append("")
+                continue
+            line = ""
+            line_pt = 0
+            for char in segment:
+                char_pt = self._pdf_char_width_pt(char)
+                if line and line_pt + char_pt > budget:
+                    lines.append(line)
+                    line = ""
+                    line_pt = 0
+                    if char == " ":
+                        continue
+                line += char
+                line_pt += char_pt
+            if line:
+                lines.append(line)
+        return lines or [""]
 
-    def _pdf_text_units(self, value: str) -> int:
-        return sum(1 if char.isascii() else 2 for char in value)
+    def _pdf_char_width_pt(self, char: str) -> int:
+        return 5 if ord(char) < 128 else 10
+
+    def _pdf_text_width_pt(self, value: str) -> int:
+        return sum(self._pdf_char_width_pt(char) for char in value)
 
     def _pdf_hex_text(self, value: str) -> str:
         return value.encode("utf-16-be").hex().upper()
@@ -1383,6 +1527,14 @@ class InspectionService:
         if not faults:
             return "none"
         return max((fault["risk_level"] for fault in faults), key=lambda value: RISK_ORDER.get(value, 0))
+
+    def _primary_fault(self, faults: list[sqlite3.Row]) -> sqlite3.Row | None:
+        if not faults:
+            return None
+        return max(
+            faults,
+            key=lambda fault: (RISK_ORDER.get(fault["risk_level"], 0), fault["last_seen_at"]),
+        )
 
     def _report_conclusion(
         self,
@@ -1466,29 +1618,6 @@ class InspectionService:
         if not items:
             return "<p>暂无。</p>"
         return "<ul>" + "".join(f"<li>{html_lib.escape(item)}</li>" for item in items) + "</ul>"
-
-    def _pdf_fault_lines(self, fault: dict[str, Any]) -> list[str]:
-        lines = [
-            "",
-            fault["title"],
-            f"发现情况：识别到{fault['faultTypeLabel']}，风险等级为{fault['riskLabel']}，模型置信度 {fault['confidence']:.0%}。",
-            f"累计出现 {fault['occurrenceCount']} 次，最佳证据帧：{fault['bestFrameId']}",
-            f"告警与状态：{fault['alarmMessage']} / 告警状态：{fault['alarmStatusLabel']} / 故障状态：{fault['processStatusLabel']}",
-            f"状态跟踪：最近处理人 {fault['lastHandledBy']}，最近处理时间 {self._report_time(fault['lastHandledAt'])}",
-        ]
-        advice = fault["advice"]
-        if not advice:
-            lines.append("维修建议：尚未生成")
-            return lines
-        lines.extend(
-            [
-                f"风险分析：{advice['riskAnalysis']}",
-                "检查步骤：" + "；".join(advice["inspectionSteps"]),
-                "维修建议：" + "；".join(advice["maintenanceSuggestions"]),
-                "安全注意事项：" + "；".join(advice["safetyNotes"]),
-            ]
-        )
-        return lines
 
     def _ensure_device(self, connection: sqlite3.Connection, device_id: str, now: datetime) -> sqlite3.Row:
         row = connection.execute("SELECT * FROM devices WHERE device_id = ?", (device_id,)).fetchone()

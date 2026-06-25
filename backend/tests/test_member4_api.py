@@ -118,7 +118,10 @@ def test_pdf_report_wraps_and_paginates_long_content(tmp_path, monkeypatch) -> N
     assert b"/Count 2" in content or b"/Count 3" in content
     assert content.count(b"/Type /Page") >= 2
     text_runs = pdf_text_runs(content)
-    assert max(service._pdf_text_units(text) for text in text_runs) <= service_module.PDF_MAX_TEXT_UNITS
+    assert max(service._pdf_text_width_pt(text) for text in text_runs) <= service_module.PDF_PRINTABLE_WIDTH
+    assert b"/F1 18 Tf" in content
+    assert "共".encode("utf-16-be").hex().upper().encode("ascii") in content
+    assert b" re S" in content
 
 
 def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
@@ -256,7 +259,7 @@ def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
     assert advice_data["maintenanceSuggestions"][0].encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
     text_runs = pdf_text_runs(downloaded.content)
     assert len(text_runs) > 20
-    assert max(service_module.get_service()._pdf_text_units(text) for text in text_runs) <= service_module.PDF_MAX_TEXT_UNITS
+    assert max(service_module.get_service()._pdf_text_width_pt(text) for text in text_runs) <= service_module.PDF_PRINTABLE_WIDTH
     assert exported_data["fileName"].endswith(".pdf")
 
     refreshed_detail = client.get(f"/api/reports/{report['reportId']}")
