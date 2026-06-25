@@ -58,11 +58,45 @@ def start_inspection() -> str:
     return body["data"]["inspectionId"]
 
 
+def _pdf_gid_to_unicode(content: bytes) -> dict[int, str]:
+    """Build a gid -> unicode map from an embedded Identity-H FontFile2.
+
+    Returns an empty dict when the PDF uses the non-embedded STSong-Light
+    fallback (no FontFile2) or fontTools is unavailable.
+    """
+    if b"/FontFile2" not in content:
+        return {}
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        return {}
+    stream = content.split(b"/FontFile2", 1)[1]
+    stream = stream.split(b"stream\n", 1)[1]
+    ttf_bytes = stream.split(b"\nendstream", 1)[0]
+    import io
+
+    font = TTFont(io.BytesIO(ttf_bytes))
+    cmap = font.getBestCmap()  # codepoint -> glyph name
+    order = font.getGlyphOrder()
+    name_to_gid = {name: gid for gid, name in enumerate(order)}
+    return {name_to_gid[name]: chr(cp) for cp, name in cmap.items() if name in name_to_gid}
+
+
 def pdf_text_runs(content: bytes) -> list[str]:
-    return [
-        bytes.fromhex(match.decode("ascii")).decode("utf-16-be")
-        for match in re.findall(rb"<([0-9A-F]+)> Tj", content)
-    ]
+    gid_to_unicode = _pdf_gid_to_unicode(content)
+    runs: list[str] = []
+    for match in re.findall(rb"<([0-9A-F]+)> Tj", content):
+        hex_text = match.decode("ascii")
+        if gid_to_unicode:
+            gids = [int(hex_text[i : i + 4], 16) for i in range(0, len(hex_text), 4)]
+            runs.append("".join(gid_to_unicode.get(gid, "�") for gid in gids))
+        else:
+            runs.append(bytes.fromhex(hex_text).decode("utf-16-be"))
+    return runs
+
+
+def pdf_is_embedded(content: bytes) -> bool:
+    return b"/FontFile2" in content and b"/Identity-H" in content
 
 
 def test_pdf_report_wraps_and_paginates_long_content(tmp_path, monkeypatch) -> None:
@@ -120,8 +154,10 @@ def test_pdf_report_wraps_and_paginates_long_content(tmp_path, monkeypatch) -> N
     text_runs = pdf_text_runs(content)
     assert max(service._pdf_text_width_pt(text) for text in text_runs) <= service_module.PDF_PRINTABLE_WIDTH
     assert b"/F1 18 Tf" in content
-    assert "共".encode("utf-16-be").hex().upper().encode("ascii") in content
+    assert any("共" in run for run in text_runs)
     assert b" re S" in content
+    if pdf_is_embedded(content):
+        assert b"/WQYZenHei" in content
 
 
 def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
@@ -253,13 +289,15 @@ def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
     downloaded = client.get(exported_data["downloadUrl"])
     assert downloaded.status_code == 200
     assert downloaded.content.startswith(b"%PDF-1.4")
-    assert "2号线路绝缘子 表面破损巡检报告".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
-    assert "一、巡检结论".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
-    assert "三、故障发现与处置建议".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
-    assert advice_data["maintenanceSuggestions"][0].encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
+    report_text = "".join(pdf_text_runs(downloaded.content))
+    assert "2号线路绝缘子 表面破损巡检报告" in report_text
+    assert "一、巡检结论" in report_text
+    assert "三、故障发现与处置建议" in report_text
+    assert advice_data["maintenanceSuggestions"][0] in report_text
     text_runs = pdf_text_runs(downloaded.content)
     assert len(text_runs) > 20
     assert max(service_module.get_service()._pdf_text_width_pt(text) for text in text_runs) <= service_module.PDF_PRINTABLE_WIDTH
+    assert pdf_is_embedded(downloaded.content) or b"STSong-Light" in downloaded.content
     assert exported_data["fileName"].endswith(".pdf")
 
     refreshed_detail = client.get(f"/api/reports/{report['reportId']}")

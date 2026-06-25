@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import html as html_lib
+import io
 import json
 import sqlite3
 import urllib.error
@@ -9,7 +10,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from app.core.config import settings
 from app.core.errors import ApiException
@@ -62,6 +63,8 @@ PDF_COLOR_BODY = (0.12, 0.14, 0.20)
 PDF_COLOR_MUTED = (0.45, 0.50, 0.58)
 PDF_COLOR_RULE = (0.66, 0.70, 0.76)
 PDF_COLOR_DANGER = (0.80, 0.20, 0.20)
+PDF_CJK_FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
+PDF_CJK_FONT_NAME = "WQYZenHei"
 FAULT_LABELS = {
     "surface_damage": "表面破损",
     "rust": "锈蚀",
@@ -1291,33 +1294,36 @@ class InspectionService:
 
     def _write_pdf_report(self, report: dict[str, Any], file_name: str) -> None:
         items = self._build_pdf_items(report)
-        pages = self._layout_pdf_pages(items)
-        total_pages = len(pages)
         report_id = str(report["report_id"])
+        footer_chars = f"{report_id}  ·  第 {1} 页 / 共 {9} 页"
+        all_text = "".join(item.text for item in items) + footer_chars
+        font = self._build_embedded_font(all_text)
+        if font is not None:
+            char_width_pt = lambda ch: self._embedded_char_width_pt(ch, font)
+            glyph_hex = lambda text: self._pdf_identity_hex(text, font["cid_map"])
+        else:
+            char_width_pt = self._pdf_char_width_pt
+            glyph_hex = self._pdf_hex_text
+        pages = self._layout_pdf_pages(items, char_width_pt=char_width_pt)
+        total_pages = len(pages)
         streams = [
-            self._pdf_page_stream(page, page_no=index + 1, total_pages=total_pages, report_id=report_id)
+            self._pdf_page_stream(
+                page,
+                page_no=index + 1,
+                total_pages=total_pages,
+                report_id=report_id,
+                glyph_hex=glyph_hex,
+            )
             for index, page in enumerate(pages)
         ]
-        page_object_ids = [6 + index * 2 for index in range(len(streams))]
-        content_object_ids = [page_object_id + 1 for page_object_id in page_object_ids]
-        kids = " ".join(f"{page_object_id} 0 R" for page_object_id in page_object_ids).encode("ascii")
-        objects = [
-            b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [" + kids + b"] /Count " + str(len(streams)).encode("ascii") + b" >>",
-            b"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [4 0 R] >>",
-            b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo 5 0 R /DW 1000 >>",
-            b"<< /Registry (Adobe) /Ordering (GB1) /Supplement 2 >>",
-        ]
-        for page_object_id, content_object_id, stream in zip(page_object_ids, content_object_ids, streams):
-            objects.append(
-                (
-                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PDF_PAGE_WIDTH} {PDF_PAGE_HEIGHT}] "
-                    f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_object_id} 0 R >>"
-                ).encode("ascii")
-            )
-            objects.append(
-                b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream"
-            )
+        kids = " ".join(f"{obj_id} 0 R" for obj_id in self._pdf_page_object_ids(len(streams), font)).encode("ascii")
+        objects = self._pdf_font_and_page_objects(
+            font=font,
+            kids=kids,
+            page_count=len(streams),
+            content_object_ids=self._pdf_content_object_ids(len(streams), font),
+            streams=streams,
+        )
         pdf = bytearray(b"%PDF-1.4\n")
         offsets = [0]
         for index, obj in enumerate(objects, start=1):
@@ -1334,6 +1340,130 @@ class InspectionService:
             f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n".encode("ascii")
         )
         (self._reports_dir() / file_name).write_bytes(bytes(pdf))
+
+    def _pdf_font_and_page_objects(
+        self,
+        *,
+        font: dict[str, Any] | None,
+        kids: bytes,
+        page_count: int,
+        content_object_ids: list[int],
+        streams: list[bytes],
+    ) -> list[bytes]:
+        objects: list[bytes] = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [" + kids + b"] /Count " + str(page_count).encode("ascii") + b" >>",
+        ]
+        if font is None:
+            objects += [
+                b"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [4 0 R] >>",
+                b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo 5 0 R /DW 1000 >>",
+                b"<< /Registry (Adobe) /Ordering (GB1) /Supplement 2 >>",
+            ]
+        else:
+            name = PDF_CJK_FONT_NAME.encode("ascii")
+            desc = font["desc"]
+            w_array = self._pdf_w_array_bytes(font["widths"])
+            bbox = " ".join(str(v) for v in desc["bbox"]).encode("ascii")
+            objects += [
+                b"<< /Type /Font /Subtype /Type0 /BaseFont /" + name + b" /Encoding /Identity-H /DescendantFonts [4 0 R] >>",
+                (
+                    b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /" + name + b" "
+                    b"/CIDSystemInfo 5 0 R /DW 1000 /W " + w_array + b" /FontDescriptor 6 0 R >>"
+                ),
+                b"<< /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>",
+                (
+                    b"<< /Type /FontDescriptor /FontName /" + name + b" /Flags " + str(desc["flags"]).encode("ascii")
+                    + b" /FontBBox [" + bbox + b"] /ItalicAngle 0 /Ascent " + str(desc["ascent"]).encode("ascii")
+                    + b" /Descent " + str(desc["descent"]).encode("ascii")
+                    + b" /CapHeight " + str(desc["capHeight"]).encode("ascii")
+                    + b" /StemV " + str(desc["stemV"]).encode("ascii")
+                    + b" /FontFile2 7 0 R >>"
+                ),
+            ]
+            ttf = font["ttf_bytes"]
+            objects.append(
+                b"<< /Length1 " + str(len(ttf)).encode("ascii") + b" /Length " + str(len(ttf)).encode("ascii")
+                + b" >>\nstream\n" + ttf + b"\nendstream"
+            )
+        page_object_ids = self._pdf_page_object_ids(page_count, font)
+        for page_object_id, content_object_id, stream in zip(page_object_ids, content_object_ids, streams):
+            objects.append(
+                (
+                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PDF_PAGE_WIDTH} {PDF_PAGE_HEIGHT}] "
+                    f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_object_id} 0 R >>"
+                ).encode("ascii")
+            )
+            objects.append(
+                b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream"
+            )
+        return objects
+
+    def _pdf_page_object_ids(self, page_count: int, font: dict[str, Any] | None) -> list[int]:
+        first_page_id = 8 if font is not None else 6
+        return [first_page_id + index * 2 for index in range(page_count)]
+
+    def _pdf_content_object_ids(self, page_count: int, font: dict[str, Any] | None) -> list[int]:
+        return [page_id + 1 for page_id in self._pdf_page_object_ids(page_count, font)]
+
+    def _pdf_w_array_bytes(self, widths: dict[int, int]) -> bytes:
+        if not widths:
+            return b"[]"
+        max_gid = max(widths)
+        ordered = [widths.get(gid, 0) for gid in range(max_gid + 1)]
+        body = " ".join(str(w) for w in ordered).encode("ascii")
+        return b"[0 " + str(max_gid).encode("ascii") + b" [" + body + b"]]"
+
+    def _build_embedded_font(self, text: str) -> dict[str, Any] | None:
+        try:
+            from fontTools.subset import Options, Subsetter
+            from fontTools.ttLib import TTFont
+        except ImportError:
+            return None
+        try:
+            font = TTFont(PDF_CJK_FONT_PATH, fontNumber=0)
+        except Exception:
+            return None
+        cmap = font.getBestCmap()
+        cp_to_name: dict[int, str] = {}
+        for char in text:
+            cp = ord(char)
+            if cp in cmap and cp not in cp_to_name:
+                cp_to_name[cp] = cmap[cp]
+        glyph_names = sorted(set(cp_to_name.values()) | {font.getGlyphName(0)})
+        options = Options(layout_features=["*"], notdef_outline=True, name_IDs=[1, 2, 4, 5, 6], drop_tables=["BDF", "FFTM"])
+        subsetter = Subsetter(options=options)
+        subsetter.populate(glyphs=glyph_names)
+        subsetter.subset(font)
+        buffer = io.BytesIO()
+        font.save(buffer)
+        ttf_bytes = buffer.getvalue()
+        glyph_order = font.getGlyphOrder()
+        name_to_gid = {name: gid for gid, name in enumerate(glyph_order)}
+        units = font["head"].unitsPerEm
+        cid_map = {cp: name_to_gid[name] for cp, name in cp_to_name.items() if name in name_to_gid}
+        widths = {gid: round(font["hmtx"][name][0] / units * 1000) for gid, name in enumerate(glyph_order)}
+        head = font["head"]
+        hhea = font["hhea"]
+        scale = 1000 / units
+        desc = {
+            "flags": 4,
+            "ascent": round(hhea.ascender * scale),
+            "descent": round(hhea.descender * scale),
+            "bbox": [round(head.xMin * scale), round(head.yMin * scale), round(head.xMax * scale), round(head.yMax * scale)],
+            "capHeight": round(hhea.ascender * scale),
+            "stemV": 80,
+        }
+        return {"ttf_bytes": ttf_bytes, "cid_map": cid_map, "widths": widths, "desc": desc}
+
+    def _embedded_char_width_pt(self, char: str, font: dict[str, Any]) -> float:
+        gid = font["cid_map"].get(ord(char))
+        if gid is None:
+            return float(self._pdf_char_width_pt(char))
+        return font["widths"][gid] / 100.0
+
+    def _pdf_identity_hex(self, value: str, cid_map: dict[int, int]) -> str:
+        return "".join(f"{cid_map.get(ord(char), 0):04X}" for char in value)
 
     def _build_pdf_items(self, report: dict[str, Any]) -> list[_PdfItem]:
         conclusion = report["conclusion"]
@@ -1415,7 +1545,14 @@ class InspectionService:
             items.append(_PdfItem("text", "建议来源：" + " / ".join(advice_meta), PDF_FONT_FOOTER, PDF_COLOR_MUTED))
         return items
 
-    def _layout_pdf_pages(self, items: list[_PdfItem]) -> list[list[_PdfItem]]:
+    def _layout_pdf_pages(
+        self,
+        items: list[_PdfItem],
+        *,
+        char_width_pt: "Callable[[str], float] | None" = None,
+    ) -> list[list[_PdfItem]]:
+        if char_width_pt is None:
+            char_width_pt = self._pdf_char_width_pt
         pages: list[list[_PdfItem]] = [[]]
         used = 0
         available = PDF_TOP_MARGIN - PDF_FOOTER_Y - 24
@@ -1423,7 +1560,7 @@ class InspectionService:
             pieces: list[_PdfItem] = []
             if item.kind == "text":
                 budget = PDF_WRAP_BUDGET_PT - item.indent
-                for wrapped in self._wrap_pdf_text(item.text, budget):
+                for wrapped in self._wrap_pdf_text(item.text, budget, char_width_pt=char_width_pt):
                     pieces.append(_PdfItem("text", wrapped, item.size, item.color, item.indent, item.height))
             else:
                 pieces.append(item)
@@ -1446,7 +1583,10 @@ class InspectionService:
         page_no: int,
         total_pages: int,
         report_id: str,
+        glyph_hex: "Callable[[str], str] | None" = None,
     ) -> bytes:
+        if glyph_hex is None:
+            glyph_hex = self._pdf_hex_text
         ops: list[str] = []
         y = PDF_TOP_MARGIN
         for item in items:
@@ -1468,18 +1608,26 @@ class InspectionService:
             baseline = y - item.size
             ops.append(
                 f"BT {r:.3f} {g:.3f} {b:.3f} rg /F1 {item.size} Tf "
-                f"1 0 0 1 {x:.2f} {baseline:.2f} Tm <{self._pdf_hex_text(item.text)}> Tj ET"
+                f"1 0 0 1 {x:.2f} {baseline:.2f} Tm <{glyph_hex(item.text)}> Tj ET"
             )
             y -= item.height
         footer = f"{report_id}  ·  第 {page_no} 页 / 共 {total_pages} 页"
         r, g, b = PDF_COLOR_MUTED
         ops.append(
             f"BT {r:.3f} {g:.3f} {b:.3f} rg /F1 {PDF_FONT_FOOTER} Tf "
-            f"1 0 0 1 {PDF_LEFT_MARGIN:.2f} {PDF_FOOTER_Y:.2f} Tm <{self._pdf_hex_text(footer)}> Tj ET"
+            f"1 0 0 1 {PDF_LEFT_MARGIN:.2f} {PDF_FOOTER_Y:.2f} Tm <{glyph_hex(footer)}> Tj ET"
         )
         return "\n".join(ops).encode("ascii")
 
-    def _wrap_pdf_text(self, value: str, budget: int = PDF_WRAP_BUDGET_PT) -> list[str]:
+    def _wrap_pdf_text(
+        self,
+        value: str,
+        budget: int = PDF_WRAP_BUDGET_PT,
+        *,
+        char_width_pt: "Callable[[str], float] | None" = None,
+    ) -> list[str]:
+        if char_width_pt is None:
+            char_width_pt = self._pdf_char_width_pt
         if value == "":
             return [""]
         lines: list[str] = []
@@ -1488,13 +1636,13 @@ class InspectionService:
                 lines.append("")
                 continue
             line = ""
-            line_pt = 0
+            line_pt = 0.0
             for char in segment:
-                char_pt = self._pdf_char_width_pt(char)
+                char_pt = char_width_pt(char)
                 if line and line_pt + char_pt > budget:
                     lines.append(line)
                     line = ""
-                    line_pt = 0
+                    line_pt = 0.0
                     if char == " ":
                         continue
                 line += char
