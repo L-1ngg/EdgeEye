@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 
 from fastapi.testclient import TestClient
@@ -57,7 +58,75 @@ def start_inspection() -> str:
     return body["data"]["inspectionId"]
 
 
-def test_member4_detection_advice_and_report_flow() -> None:
+def pdf_text_runs(content: bytes) -> list[str]:
+    return [
+        bytes.fromhex(match.decode("ascii")).decode("utf-16-be")
+        for match in re.findall(rb"<([0-9A-F]+)> Tj", content)
+    ]
+
+
+def test_pdf_report_wraps_and_paginates_long_content(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(service_module.settings, "reports_dir", str(tmp_path / "reports"))
+    service = service_module.get_service()
+    report = {
+        "report_id": "report-long-layout",
+        "inspection_id": "inspection-long-layout",
+        "title": "长文本分页巡检报告",
+        "summary": "用于验证 PDF 导出在长文本场景下能够自动换行并分页。",
+        "conclusion": {
+            "priority": "优先处置",
+            "finding": "本次巡检发现多项需要人工复核的异常。",
+            "action": "请安排现场处置并复核导出文件布局。",
+            "alarmSummary": "触发 5 条告警，其中高风险及以上 3 项。",
+        },
+        "deviceName": "2号线路绝缘子",
+        "location": "2号线路 A 区",
+        "startedAt": "2026-06-25T02:08:00+08:00",
+        "endedAt": "2026-06-25T02:18:00+08:00",
+        "highestRiskLabel": "高风险",
+        "faultCount": 1,
+        "alarmCount": 5,
+        "highRiskCount": 3,
+        "faults": [
+            {
+                "title": "检测到异物附着，高风险",
+                "faultTypeLabel": "异物附着",
+                "riskLabel": "高风险",
+                "confidence": 0.93,
+                "occurrenceCount": 8,
+                "bestFrameId": "frame-long-visible-001",
+                "alarmMessage": "检测到异物附着，高风险",
+                "alarmStatusLabel": "处理中",
+                "processStatusLabel": "处理中",
+                "lastHandledBy": "admin",
+                "lastHandledAt": "2026-06-25T02:21:00+08:00",
+                "advice": {
+                    "riskAnalysis": "检测到异物附着，当前风险等级为高风险。" * 18,
+                    "inspectionSteps": ["核对最佳证据帧及相邻帧，确认故障位置和范围。"] * 20,
+                    "maintenanceSuggestions": ["安排具备资质的运维人员进行现场复检。"] * 20,
+                    "safetyNotes": ["现场操作前确认设备处于安全状态，并执行必要的停电、验电和隔离措施。"] * 20,
+                },
+            }
+        ],
+    }
+
+    service._write_pdf_report(report, "report-long-layout.pdf")
+    pdf_path = tmp_path / "reports" / "report-long-layout.pdf"
+    content = pdf_path.read_bytes()
+
+    assert content.startswith(b"%PDF-1.4")
+    assert b"/Count 2" in content or b"/Count 3" in content
+    assert content.count(b"/Type /Page") >= 2
+    text_runs = pdf_text_runs(content)
+    assert max(service._pdf_text_units(text) for text in text_runs) <= service_module.PDF_MAX_TEXT_UNITS
+
+
+def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
+    monkeypatch.setattr(service_module.settings, "llm_provider", "rule-template")
+    monkeypatch.setattr(service_module.settings, "llm_api_url", None)
+    monkeypatch.setattr(service_module.settings, "llm_api_key", None)
+    monkeypatch.setattr(service_module.settings, "llm_model_name", "rule-template")
+
     inspection_id = start_inspection()
     payload = detection_payload(inspection_id)
 
@@ -97,10 +166,14 @@ def test_member4_detection_advice_and_report_flow() -> None:
     assert alarms.status_code == 200
     alarm = alarms.json()["data"]["items"][0]
     assert alarm["alarmLevel"] == "warning"
+    assert alarm["message"] == "检测到表面破损，高风险"
 
     events = client.get("/api/events")
     assert events.status_code == 200
-    assert events.json()["data"]["items"][0]["adviceStatus"] == "none"
+    event = events.json()["data"]["items"][0]
+    assert event["adviceStatus"] == "none"
+    assert event["title"] == "检测到表面破损，高风险"
+    assert event["summary"] == "累计检测 1 次，最佳证据帧：frame-000001。"
 
     patched = client.patch(
         f"/api/faults/{fault['faultId']}/status",
@@ -146,10 +219,29 @@ def test_member4_detection_advice_and_report_flow() -> None:
     assert reports.status_code == 200
     report = reports.json()["data"]["items"][0]
     assert report["reportStatus"] == "ready"
+    assert report["title"] == "2号线路绝缘子 表面破损巡检报告"
 
     detail = client.get(f"/api/reports/{report['reportId']}")
     assert detail.status_code == 200
-    assert detail.json()["data"]["advices"][0]["adviceId"] == advice_data["adviceId"]
+    detail_data = detail.json()["data"]
+    assert detail_data["summary"] == "本次巡检发现 1 项故障、触发 1 条告警，其中高风险及以上 1 项。"
+    assert detail_data["faults"][0]["faultId"] == fault["faultId"]
+    assert detail_data["advices"][0]["adviceId"] == advice_data["adviceId"]
+    assert detail_data["advices"][0]["maintenanceSuggestions"] == advice_data["maintenanceSuggestions"]
+
+    html_export = client.get(f"/api/reports/{report['reportId']}/export?format=html")
+    assert html_export.status_code == 200
+    html_downloaded = client.get(html_export.json()["data"]["downloadUrl"])
+    assert html_downloaded.status_code == 200
+    html_content = html_downloaded.text
+    assert "2号线路绝缘子 表面破损巡检报告" in html_content
+    assert "一、巡检结论" in html_content
+    assert "优先处置" in html_content
+    assert "二、巡检对象" in html_content
+    assert "三、故障发现与处置建议" in html_content
+    assert "系统在本次巡检中识别到表面破损" in html_content
+    assert advice_data["riskAnalysis"] in html_content
+    assert advice_data["maintenanceSuggestions"][0] in html_content
 
     exported = client.get(f"/api/reports/{report['reportId']}/export?format=pdf")
     assert exported.status_code == 200
@@ -158,6 +250,13 @@ def test_member4_detection_advice_and_report_flow() -> None:
     downloaded = client.get(exported_data["downloadUrl"])
     assert downloaded.status_code == 200
     assert downloaded.content.startswith(b"%PDF-1.4")
+    assert "2号线路绝缘子 表面破损巡检报告".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
+    assert "一、巡检结论".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
+    assert "三、故障发现与处置建议".encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
+    assert advice_data["maintenanceSuggestions"][0].encode("utf-16-be").hex().upper().encode("ascii") in downloaded.content
+    text_runs = pdf_text_runs(downloaded.content)
+    assert len(text_runs) > 20
+    assert max(service_module.get_service()._pdf_text_units(text) for text in text_runs) <= service_module.PDF_MAX_TEXT_UNITS
     assert exported_data["fileName"].endswith(".pdf")
 
     refreshed_detail = client.get(f"/api/reports/{report['reportId']}")

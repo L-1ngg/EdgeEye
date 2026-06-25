@@ -70,7 +70,7 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
           <div className="report-table__head">
             <span>报告</span>
             <span>巡检</span>
-            <span>格式</span>
+            <span>类型</span>
             <span>状态</span>
             <span>导出</span>
           </div>
@@ -82,7 +82,7 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
                   <small>{formatTime(report.createdAt)}</small>
                 </div>
                 <span>{report.inspectionId}</span>
-                <span>{report.format.toUpperCase()}</span>
+                <span>{getReportTypeLabel(report.format)}</span>
                 <span className="report-table__status">
                   <StatusPill status={report.reportStatus} />
                 </span>
@@ -103,6 +103,17 @@ export function ReportsPage({ dataSource, reports }: ReportsPageProps) {
       </section>
     </div>
   );
+}
+
+function getReportTypeLabel(format: ReportSummary["format"]) {
+  switch (format) {
+    case "html":
+      return "在线报告";
+    case "pdf":
+      return "PDF 文件";
+    default:
+      return format;
+  }
 }
 
 function getExportLabel(status: ReportSummary["reportStatus"]) {

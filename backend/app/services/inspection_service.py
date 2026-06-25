@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html as html_lib
 import json
 import sqlite3
 import urllib.error
@@ -41,6 +42,54 @@ RULE_VERSION = "builtin-2026-06-17"
 RISK_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-pro"
+PDF_MAX_TEXT_UNITS = 54
+PDF_LINES_PER_PAGE = 41
+PDF_LINE_HEIGHT = 16
+PDF_LEFT_MARGIN = 72
+PDF_TOP_MARGIN = 760
+FAULT_LABELS = {
+    "surface_damage": "表面破损",
+    "rust": "锈蚀",
+    "foreign_object": "异物附着",
+    "smoke": "烟雾",
+    "fire": "明火",
+    "person_intrusion": "人员闯入",
+    "helmet_missing": "未佩戴安全帽",
+    "unknown": "未知故障",
+}
+RISK_LABELS = {
+    "none": "无风险",
+    "low": "低风险",
+    "medium": "中风险",
+    "high": "高风险",
+    "critical": "严重风险",
+}
+DEVICE_NAME_LABELS = {
+    "device-001": "2号线路绝缘子",
+    "device-002": "变压器间隔",
+    "device-003": "开关柜",
+    "device-004": "断路器",
+}
+DEVICE_LOCATION_LABELS = {
+    "Line 2 Area A": "2号线路 A 区",
+    "Substation bay 1": "变电站 1 号间隔",
+    "Distribution room": "配电室",
+    "Feeder cabinet": "馈线柜",
+    "unknown": "未知位置",
+}
+PROCESS_STATUS_LABELS = {
+    "pending": "待处理",
+    "processing": "处理中",
+    "resolved": "已处理",
+    "ignored": "已忽略",
+}
+ADVICE_STATUS_LABELS = {
+    "none": "未生成",
+    "generating": "生成中",
+    "ready": "已生成",
+    "fallback": "规则模板",
+    "failed": "生成失败",
+}
 
 
 def current_timestamp() -> datetime:
@@ -658,13 +707,14 @@ class InspectionService:
             report = connection.execute("SELECT * FROM reports WHERE report_id = ?", (report_id,)).fetchone()
             if report is None:
                 raise ApiException("NOT_FOUND", "report not found", status_code=404)
+            document = self._build_report_document(connection, report["inspection_id"], report_id=report_id)
             generated_at = current_timestamp()
             file_name = f"{report_id}.{report_format}"
             download_url = f"/reports/{file_name}"
             if report_format == "pdf":
-                self._write_pdf_report(report, file_name)
+                self._write_pdf_report(document, file_name)
             else:
-                self._write_html_report(report, file_name)
+                self._write_html_report(document, file_name)
             export = ReportExport(
                 format=report_format,
                 exportStatus="ready",
@@ -1019,27 +1069,10 @@ class InspectionService:
             "SELECT * FROM reports WHERE inspection_id = ? AND format = 'html' AND version = 1",
             (inspection_id,),
         ).fetchone()
-        fault_count = connection.execute(
-            "SELECT COUNT(*) FROM faults WHERE inspection_id = ?",
-            (inspection_id,),
-        ).fetchone()[0]
-        alarm_count = connection.execute(
-            """
-            SELECT COUNT(*)
-            FROM alarms a
-            JOIN faults f ON f.fault_id = a.fault_id
-            WHERE f.inspection_id = ?
-            """,
-            (inspection_id,),
-        ).fetchone()[0]
-        inspection = self._get_inspection_row(connection, inspection_id)
-        device = connection.execute(
-            "SELECT * FROM devices WHERE device_id = ?",
-            (inspection["device_id"],),
-        ).fetchone()
-        title = f"{device['device_name']} inspection report"
-        summary = f"Inspection {inspection_id} completed with {fault_count} fault(s) and {alarm_count} alarm(s)."
         report_id = existing["report_id"] if existing else self._next_report_id(connection, generated_at)
+        document = self._build_report_document(connection, inspection_id, report_id=report_id)
+        title = document["title"]
+        summary = document["summary"]
         url = f"/reports/{report_id}.html"
         exports = [
             {
@@ -1060,7 +1093,7 @@ class InspectionService:
                 """,
                 (title, summary, url, _iso(generated_at), _json_dump(exports), report_id),
             )
-            self._write_html_report({"report_id": report_id, "title": title, "summary": summary}, f"{report_id}.html")
+            self._write_html_report(document, f"{report_id}.html")
             return
         connection.execute(
             """
@@ -1071,43 +1104,209 @@ class InspectionService:
             """,
             (report_id, inspection_id, title, summary, url, _iso(generated_at), _json_dump(exports)),
         )
-        self._write_html_report({"report_id": report_id, "title": title, "summary": summary}, f"{report_id}.html")
+        self._write_html_report(document, f"{report_id}.html")
+
+    def _build_report_document(
+        self,
+        connection: sqlite3.Connection,
+        inspection_id: str,
+        *,
+        report_id: str,
+    ) -> dict[str, Any]:
+        inspection = self._get_inspection_row(connection, inspection_id)
+        device = connection.execute(
+            "SELECT * FROM devices WHERE device_id = ?",
+            (inspection["device_id"],),
+        ).fetchone()
+        faults = connection.execute(
+            "SELECT * FROM faults WHERE inspection_id = ? ORDER BY last_seen_at DESC",
+            (inspection_id,),
+        ).fetchall()
+        alarms = connection.execute(
+            """
+            SELECT a.*
+            FROM alarms a
+            JOIN faults f ON f.fault_id = a.fault_id
+            WHERE f.inspection_id = ?
+            ORDER BY a.last_triggered_at DESC
+            """,
+            (inspection_id,),
+        ).fetchall()
+        advice_by_fault_id = {
+            row["fault_id"]: row
+            for row in connection.execute(
+                """
+                SELECT ad.*
+                FROM advice ad
+                JOIN faults f ON f.fault_id = ad.fault_id
+                WHERE f.inspection_id = ?
+                ORDER BY ad.created_at DESC
+                """,
+                (inspection_id,),
+            ).fetchall()
+        }
+        primary_fault = faults[0] if faults else None
+        device_name = self._device_display_name(device)
+        location = self._location_display_name(device["location"])
+        title = (
+            f"{device_name} {self._fault_display_name(primary_fault)}巡检报告"
+            if primary_fault
+            else f"{device_name} 巡检报告"
+        )
+        high_risk_count = sum(1 for fault in faults if fault["risk_level"] in {"high", "critical"})
+        highest_risk = self._highest_risk_level(faults)
+        conclusion = self._report_conclusion(
+            fault_count=len(faults),
+            alarm_count=len(alarms),
+            high_risk_count=high_risk_count,
+            highest_risk=highest_risk,
+        )
+        summary = (
+            f"本次巡检发现 {len(faults)} 项故障、触发 {len(alarms)} 条告警，"
+            f"其中高风险及以上 {high_risk_count} 项。"
+        )
+        fault_sections = []
+        for fault in faults:
+            advice = advice_by_fault_id.get(fault["fault_id"])
+            alarm = next((item for item in alarms if item["fault_id"] == fault["fault_id"]), None)
+            fault_sections.append(
+                {
+                    "faultId": fault["fault_id"],
+                    "title": self._alarm_message(fault["fault_type"], fault["risk_level"]),
+                    "faultTypeLabel": self._fault_display_name(fault),
+                    "riskLabel": RISK_LABELS.get(fault["risk_level"], fault["risk_level"]),
+                    "confidence": fault["confidence"],
+                    "bestFrameId": fault["best_frame_id"],
+                    "bestImageUrl": fault["best_annotated_image_url"] or fault["best_image_url"],
+                    "processStatus": fault["process_status"],
+                    "processStatusLabel": PROCESS_STATUS_LABELS.get(fault["process_status"], fault["process_status"]),
+                    "occurrenceCount": fault["occurrence_count"],
+                    "firstSeenAt": fault["first_seen_at"],
+                    "lastSeenAt": fault["last_seen_at"],
+                    "lastHandledBy": fault["last_handled_by"] or "未记录",
+                    "lastHandledAt": fault["last_handled_at"],
+                    "alarmMessage": alarm["message"] if alarm else "未触发告警",
+                    "alarmStatusLabel": (
+                        PROCESS_STATUS_LABELS.get(alarm["process_status"], alarm["process_status"])
+                        if alarm
+                        else "未触发"
+                    ),
+                    "advice": self._report_advice_section(advice) if advice else None,
+                }
+            )
+        return {
+            "report_id": report_id,
+            "inspection_id": inspection_id,
+            "title": title,
+            "summary": summary,
+            "conclusion": conclusion,
+            "deviceName": device_name,
+            "location": location,
+            "startedAt": inspection["started_at"],
+            "endedAt": inspection["ended_at"],
+            "highestRiskLabel": RISK_LABELS.get(highest_risk, highest_risk),
+            "faultCount": len(faults),
+            "alarmCount": len(alarms),
+            "highRiskCount": high_risk_count,
+            "faults": fault_sections,
+        }
 
     def _reports_dir(self) -> Path:
         reports_dir = Path(settings.reports_dir)
         reports_dir.mkdir(parents=True, exist_ok=True)
         return reports_dir
 
-    def _write_html_report(self, report: sqlite3.Row | dict[str, Any], file_name: str) -> None:
+    def _write_html_report(self, report: dict[str, Any], file_name: str) -> None:
         title = report["title"]
         summary = report["summary"]
-        html = (
+        fault_sections = "".join(self._html_fault_section(fault) for fault in report["faults"])
+        conclusion = report["conclusion"]
+        html_content = (
             "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
-            f"<title>{title}</title></head><body>"
-            f"<h1>{title}</h1><p>{summary}</p>"
-            f"<p>Report ID: {report['report_id']}</p>"
+            f"<title>{html_lib.escape(title)}</title>"
+            "<style>"
+            "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.65;margin:32px;color:#172033;background:#f7f9fc;}"
+            "main{max-width:920px;margin:0 auto;background:#fff;border:1px solid #d8dee8;border-radius:10px;padding:28px;}"
+            "h1{font-size:26px;margin:0 0 8px;}h2{font-size:18px;margin:28px 0 10px;border-bottom:1px solid #d8dee8;padding-bottom:6px;}"
+            "h3{font-size:15px;margin:18px 0 8px}.meta{color:#5b667a}.lead{font-size:16px;color:#2f3b52;}"
+            ".summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0;}"
+            ".summary-card{border:1px solid #d8dee8;border-radius:8px;padding:12px;background:#fbfcff;}.summary-card span{display:block;color:#5b667a;font-size:12px}.summary-card strong{font-size:18px;}"
+            ".section{border:1px solid #d8dee8;border-radius:8px;padding:16px;margin-top:16px;background:#fff;}"
+            ".finding{border-left:4px solid #2563eb;background:#eff6ff;padding:12px 14px;border-radius:6px;margin:16px 0;}"
+            "ul{padding-left:22px}.evidence{color:#5b667a;font-size:13px;word-break:break-all;}"
+            "</style></head><body>"
+            "<main>"
+            f"<h1>{html_lib.escape(title)}</h1><p class=\"lead\">{html_lib.escape(summary)}</p>"
+            f"<p class=\"meta\">报告编号：{html_lib.escape(report['report_id'])} / 巡检编号：{html_lib.escape(report['inspection_id'])}</p>"
+            "<section>"
+            "<h2>一、巡检结论</h2>"
+            f"<div class=\"finding\"><strong>{html_lib.escape(conclusion['priority'])}</strong><br>{html_lib.escape(conclusion['finding'])}<br>{html_lib.escape(conclusion['action'])}</div>"
+            f"<p>{html_lib.escape(conclusion['alarmSummary'])}</p>"
+            "<div class=\"summary-grid\">"
+            f"<div class=\"summary-card\"><span>最高风险</span><strong>{html_lib.escape(report['highestRiskLabel'])}</strong></div>"
+            f"<div class=\"summary-card\"><span>故障数量</span><strong>{report['faultCount']}</strong></div>"
+            f"<div class=\"summary-card\"><span>告警数量</span><strong>{report['alarmCount']}</strong></div>"
+            f"<div class=\"summary-card\"><span>高风险及以上</span><strong>{report['highRiskCount']}</strong></div>"
+            "</div></section>"
+            "<section>"
+            "<h2>二、巡检对象</h2>"
+            f"<p>设备：{html_lib.escape(report['deviceName'])}</p>"
+            f"<p>位置：{html_lib.escape(report['location'])}</p>"
+            f"<p>开始时间：{html_lib.escape(self._report_time(report['startedAt']))} / 结束时间：{html_lib.escape(self._report_time(report['endedAt']))}</p>"
+            "</section>"
+            "<section><h2>三、故障发现与处置建议</h2>"
+            f"{fault_sections or '<p>本次巡检未发现故障。</p>'}"
+            "</section>"
+            "</main>"
             "</body></html>"
         )
-        (self._reports_dir() / file_name).write_text(html, encoding="utf-8")
+        (self._reports_dir() / file_name).write_text(html_content, encoding="utf-8")
 
-    def _write_pdf_report(self, report: sqlite3.Row | dict[str, Any], file_name: str) -> None:
+    def _write_pdf_report(self, report: dict[str, Any], file_name: str) -> None:
         title = str(report["title"])
         summary = str(report["summary"])
-        lines = [title, summary, f"Report ID: {report['report_id']}"]
-        text_commands = ["BT", "/F1 14 Tf", "72 760 Td"]
-        for index, line in enumerate(lines):
-            if index:
-                text_commands.append("0 -24 Td")
-            text_commands.append(f"({self._escape_pdf_text(line)}) Tj")
-        text_commands.append("ET")
-        stream = "\n".join(text_commands).encode("latin-1", errors="replace")
+        lines = [
+            title,
+            summary,
+            f"报告编号：{report['report_id']}",
+            f"巡检编号：{report['inspection_id']}",
+            "",
+            "一、巡检结论",
+            f"{report['conclusion']['priority']}：{report['conclusion']['finding']}",
+            report["conclusion"]["action"],
+            report["conclusion"]["alarmSummary"],
+            f"最高风险：{report['highestRiskLabel']} / 故障数量：{report['faultCount']} / 告警数量：{report['alarmCount']} / 高风险及以上：{report['highRiskCount']}",
+            "",
+            "二、巡检对象",
+            f"设备：{report['deviceName']} / 位置：{report['location']}",
+            f"开始时间：{self._report_time(report['startedAt'])} / 结束时间：{self._report_time(report['endedAt'])}",
+            "",
+            "三、故障发现与处置建议",
+        ]
+        for fault in report["faults"]:
+            lines.extend(self._pdf_fault_lines(fault))
+        pages = self._paginate_pdf_lines(lines)
+        streams = [self._pdf_page_stream(page_lines) for page_lines in pages]
+        page_object_ids = [6 + index * 2 for index in range(len(streams))]
+        content_object_ids = [page_object_id + 1 for page_object_id in page_object_ids]
+        kids = " ".join(f"{page_object_id} 0 R" for page_object_id in page_object_ids).encode("ascii")
         objects = [
             b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-            b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+            b"<< /Type /Pages /Kids [" + kids + b"] /Count " + str(len(streams)).encode("ascii") + b" >>",
+            b"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [4 0 R] >>",
+            b"<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo 5 0 R /DW 1000 >>",
+            b"<< /Registry (Adobe) /Ordering (GB1) /Supplement 2 >>",
         ]
+        for page_object_id, content_object_id, stream in zip(page_object_ids, content_object_ids, streams):
+            objects.append(
+                (
+                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                    f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_object_id} 0 R >>"
+                ).encode("ascii")
+            )
+            objects.append(
+                b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream"
+            )
         pdf = bytearray(b"%PDF-1.4\n")
         offsets = [0]
         for index, obj in enumerate(objects, start=1):
@@ -1125,8 +1324,171 @@ class InspectionService:
         )
         (self._reports_dir() / file_name).write_bytes(bytes(pdf))
 
-    def _escape_pdf_text(self, value: str) -> str:
-        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    def _paginate_pdf_lines(self, lines: list[str]) -> list[list[str]]:
+        pages: list[list[str]] = [[]]
+        for line in lines:
+            wrapped_lines = self._wrap_pdf_text(line)
+            for visual_line in wrapped_lines:
+                if len(pages[-1]) >= PDF_LINES_PER_PAGE:
+                    pages.append([])
+                pages[-1].append(visual_line)
+        return pages
+
+    def _pdf_page_stream(self, lines: list[str]) -> bytes:
+        text_commands = ["BT", "/F1 10 Tf"]
+        for index, line in enumerate(lines):
+            y = PDF_TOP_MARGIN - (index * PDF_LINE_HEIGHT)
+            text_commands.append(f"1 0 0 1 {PDF_LEFT_MARGIN} {y} Tm")
+            text_commands.append(f"<{self._pdf_hex_text(line)}> Tj")
+        text_commands.append("ET")
+        return "\n".join(text_commands).encode("ascii")
+
+    def _wrap_pdf_text(self, value: str, max_units: int = PDF_MAX_TEXT_UNITS) -> list[str]:
+        if value == "":
+            return [""]
+        lines: list[str] = []
+        current = ""
+        current_units = 0
+        for char in value:
+            char_units = self._pdf_text_units(char)
+            if current and current_units + char_units > max_units:
+                lines.append(current)
+                current = char
+                current_units = char_units
+            else:
+                current += char
+                current_units += char_units
+        if current:
+            lines.append(current)
+        return lines
+
+    def _pdf_text_units(self, value: str) -> int:
+        return sum(1 if char.isascii() else 2 for char in value)
+
+    def _pdf_hex_text(self, value: str) -> str:
+        return value.encode("utf-16-be").hex().upper()
+
+    def _fault_display_name(self, fault: sqlite3.Row | None) -> str:
+        if fault is None:
+            return "设备"
+        return FAULT_LABELS.get(fault["fault_type"], fault["fault_type"])
+
+    def _device_display_name(self, device: sqlite3.Row) -> str:
+        return DEVICE_NAME_LABELS.get(device["device_id"], device["device_name"])
+
+    def _location_display_name(self, location: str) -> str:
+        return DEVICE_LOCATION_LABELS.get(location, location)
+
+    def _highest_risk_level(self, faults: list[sqlite3.Row]) -> str:
+        if not faults:
+            return "none"
+        return max((fault["risk_level"] for fault in faults), key=lambda value: RISK_ORDER.get(value, 0))
+
+    def _report_conclusion(
+        self,
+        *,
+        fault_count: int,
+        alarm_count: int,
+        high_risk_count: int,
+        highest_risk: str,
+    ) -> dict[str, str]:
+        highest_risk_label = RISK_LABELS.get(highest_risk, highest_risk)
+        if fault_count == 0:
+            finding = "本次巡检未发现故障或告警，设备状态可继续观察。"
+            priority = "常规巡检"
+            action = "按既定周期继续巡检，并保留本次结果作为后续比对基线。"
+        elif highest_risk in {"critical", "high"}:
+            finding = f"本次巡检发现 {fault_count} 项故障，最高风险等级为{highest_risk_label}。"
+            priority = "优先处置"
+            action = "建议尽快安排现场复核，必要时执行停电、隔离和专项检修流程。"
+        else:
+            finding = f"本次巡检发现 {fault_count} 项故障，最高风险等级为{highest_risk_label}。"
+            priority = "计划处理"
+            action = "建议纳入近期运维计划，先完成证据复核和现场确认，再按规程处理。"
+        return {
+            "finding": finding,
+            "priority": priority,
+            "action": action,
+            "alarmSummary": f"触发 {alarm_count} 条告警，其中高风险及以上 {high_risk_count} 项。",
+        }
+
+    def _report_advice_section(self, advice: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "riskAnalysis": advice["risk_analysis"],
+            "inspectionSteps": _json_load(advice["inspection_steps_json"], []),
+            "maintenanceSuggestions": _json_load(advice["maintenance_suggestions_json"], []),
+            "safetyNotes": _json_load(advice["safety_notes_json"], []),
+            "modelName": advice["model_name"],
+            "adviceStatus": advice["advice_status"],
+            "adviceStatusLabel": ADVICE_STATUS_LABELS.get(advice["advice_status"], advice["advice_status"]),
+        }
+
+    def _report_time(self, value: str | None) -> str:
+        if not value:
+            return "未记录"
+        parsed = _dt(value)
+        if parsed is None:
+            return value
+        return parsed.strftime("%Y-%m-%d %H:%M")
+
+    def _html_fault_section(self, fault: dict[str, Any]) -> str:
+        advice = fault["advice"]
+        advice_html = (
+            self._html_advice_section(advice)
+            if advice
+            else "<p>该故障尚未生成维修建议。</p>"
+        )
+        return (
+            "<section class=\"section\">"
+            f"<h2>{html_lib.escape(fault['title'])}</h2>"
+            "<h3>发现情况</h3>"
+            f"<p>系统在本次巡检中识别到{html_lib.escape(fault['faultTypeLabel'])}，风险等级为{html_lib.escape(fault['riskLabel'])}，模型置信度 {fault['confidence']:.0%}。</p>"
+            f"<p>累计出现 {fault['occurrenceCount']} 次，最佳证据帧为 {html_lib.escape(fault['bestFrameId'])}。</p>"
+            f"<p class=\"evidence\">证据图：{html_lib.escape(fault['bestImageUrl'])}</p>"
+            "<h3>告警与状态</h3>"
+            f"<p>告警：{html_lib.escape(fault['alarmMessage'])} / 告警状态：{html_lib.escape(fault['alarmStatusLabel'])}</p>"
+            f"<p>故障状态：{html_lib.escape(fault['processStatusLabel'])} / 最近处理人：{html_lib.escape(fault['lastHandledBy'])} / 最近处理时间：{html_lib.escape(self._report_time(fault['lastHandledAt']))}</p>"
+            f"{advice_html}"
+            "</section>"
+        )
+
+    def _html_advice_section(self, advice: dict[str, Any]) -> str:
+        return (
+            "<h3>风险分析</h3>"
+            f"<p>{html_lib.escape(advice['riskAnalysis'])}</p>"
+            f"<h3>检查步骤</h3>{self._html_list(advice['inspectionSteps'])}"
+            f"<h3>维修建议</h3>{self._html_list(advice['maintenanceSuggestions'])}"
+            f"<h3>安全注意事项</h3>{self._html_list(advice['safetyNotes'])}"
+            f"<p class=\"meta\">建议来源：{html_lib.escape(advice['modelName'])} / 生成状态：{html_lib.escape(advice['adviceStatusLabel'])}</p>"
+        )
+
+    def _html_list(self, items: list[str]) -> str:
+        if not items:
+            return "<p>暂无。</p>"
+        return "<ul>" + "".join(f"<li>{html_lib.escape(item)}</li>" for item in items) + "</ul>"
+
+    def _pdf_fault_lines(self, fault: dict[str, Any]) -> list[str]:
+        lines = [
+            "",
+            fault["title"],
+            f"发现情况：识别到{fault['faultTypeLabel']}，风险等级为{fault['riskLabel']}，模型置信度 {fault['confidence']:.0%}。",
+            f"累计出现 {fault['occurrenceCount']} 次，最佳证据帧：{fault['bestFrameId']}",
+            f"告警与状态：{fault['alarmMessage']} / 告警状态：{fault['alarmStatusLabel']} / 故障状态：{fault['processStatusLabel']}",
+            f"状态跟踪：最近处理人 {fault['lastHandledBy']}，最近处理时间 {self._report_time(fault['lastHandledAt'])}",
+        ]
+        advice = fault["advice"]
+        if not advice:
+            lines.append("维修建议：尚未生成")
+            return lines
+        lines.extend(
+            [
+                f"风险分析：{advice['riskAnalysis']}",
+                "检查步骤：" + "；".join(advice["inspectionSteps"]),
+                "维修建议：" + "；".join(advice["maintenanceSuggestions"]),
+                "安全注意事项：" + "；".join(advice["safetyNotes"]),
+            ]
+        )
+        return lines
 
     def _ensure_device(self, connection: sqlite3.Connection, device_id: str, now: datetime) -> sqlite3.Row:
         row = connection.execute("SELECT * FROM devices WHERE device_id = ?", (device_id,)).fetchone()
@@ -1184,39 +1546,14 @@ class InspectionService:
         return "low", "info", "P3"
 
     def _alarm_message(self, fault_type: str, risk_level: str) -> str:
-        labels = {
-            "surface_damage": "surface damage detected",
-            "rust": "rust detected",
-            "foreign_object": "foreign object detected",
-            "smoke": "smoke detected",
-            "fire": "fire detected",
-            "person_intrusion": "person intrusion detected",
-            "helmet_missing": "helmet missing detected",
-            "unknown": "unknown fault detected",
-        }
-        return f"{labels.get(fault_type, 'fault detected')} with {risk_level} risk"
+        fault_label = FAULT_LABELS.get(fault_type, fault_type)
+        risk_label = RISK_LABELS.get(risk_level, risk_level)
+        return f"检测到{fault_label}，{risk_label}"
 
     def _rule_template_advice(self, fault: sqlite3.Row) -> dict[str, Any]:
         fault_type = fault["fault_type"]
-        fault_labels = {
-            "surface_damage": "表面破损",
-            "rust": "锈蚀",
-            "foreign_object": "异物附着",
-            "smoke": "烟雾",
-            "fire": "明火",
-            "person_intrusion": "人员闯入",
-            "helmet_missing": "未佩戴安全帽",
-            "unknown": "未知故障",
-        }
-        risk_labels = {
-            "none": "无风险",
-            "low": "低风险",
-            "medium": "中风险",
-            "high": "高风险",
-            "critical": "严重风险",
-        }
-        fault_label = fault_labels.get(fault_type, fault_type)
-        risk_label = risk_labels.get(fault["risk_level"], fault["risk_level"])
+        fault_label = FAULT_LABELS.get(fault_type, fault_type)
+        risk_label = RISK_LABELS.get(fault["risk_level"], fault["risk_level"])
         base = {
             "possibleCauses": ["设备长期运行老化", "外力冲击或机械振动", "潮湿、污秽或高温等环境影响"],
             "riskAnalysis": f"检测到{fault_label}，当前风险等级为{risk_label}。该问题可能影响设备运行稳定性，建议尽快安排人工复核。",
@@ -1259,23 +1596,6 @@ class InspectionService:
         return fallback, "rule-template", "fallback"
 
     def _call_llm_provider(self, fault: sqlite3.Row, *, api_url: str, model_name: str) -> dict[str, Any]:
-        fault_labels = {
-            "surface_damage": "表面破损",
-            "rust": "锈蚀",
-            "foreign_object": "异物附着",
-            "smoke": "烟雾",
-            "fire": "明火",
-            "person_intrusion": "人员闯入",
-            "helmet_missing": "未佩戴安全帽",
-            "unknown": "未知故障",
-        }
-        risk_labels = {
-            "none": "无风险",
-            "low": "低风险",
-            "medium": "中风险",
-            "high": "高风险",
-            "critical": "严重风险",
-        }
         body = {
             "model": model_name,
             "messages": [
@@ -1296,10 +1616,10 @@ class InspectionService:
                         {
                             "deviceType": fault["device_type"],
                             "faultType": fault["fault_type"],
-                            "faultTypeLabel": fault_labels.get(fault["fault_type"], fault["fault_type"]),
+                            "faultTypeLabel": FAULT_LABELS.get(fault["fault_type"], fault["fault_type"]),
                             "confidence": fault["confidence"],
                             "riskLevel": fault["risk_level"],
-                            "riskLevelLabel": risk_labels.get(fault["risk_level"], fault["risk_level"]),
+                            "riskLevelLabel": RISK_LABELS.get(fault["risk_level"], fault["risk_level"]),
                             "location": fault["location"],
                             "bestImageUrl": fault["best_annotated_image_url"] or fault["best_image_url"],
                         }
@@ -1472,7 +1792,7 @@ class InspectionService:
             alarmLevel=row["alarm_level"],
             processStatus=row["process_status"],
             title=self._alarm_message(row["fault_type"], row["risk_level"]),
-            summary=f"Detected {row['occurrence_count']} time(s); best frame {row['best_frame_id']}.",
+            summary=f"累计检测 {row['occurrence_count']} 次，最佳证据帧：{row['best_frame_id']}。",
             occurrenceCount=row["occurrence_count"],
             firstOccurredAt=_dt(row["first_seen_at"]),
             lastOccurredAt=_dt(row["last_seen_at"]),
