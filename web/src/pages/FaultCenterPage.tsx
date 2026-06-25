@@ -209,8 +209,18 @@ export function FaultCenterPage({
                   ))}
                 </ul>
               </>
+            ) : generatingAdvice ? (
+              <div className="advice-thinking" role="status" aria-live="polite">
+                <span className="advice-thinking__dots" aria-hidden="true">
+                  <span className="advice-thinking__dot" />
+                  <span className="advice-thinking__dot" />
+                  <span className="advice-thinking__dot" />
+                </span>
+                <span className="advice-thinking__label">模型思考中</span>
+                <span className="advice-thinking__sweep" aria-hidden="true" />
+              </div>
             ) : isAdviceLoading ? (
-              <p className="empty-state">正在读取维修建议。</p>
+              <p className="empty-state">正在读取维修建议…</p>
             ) : (
               <div className="advice-empty-state">
                 <p className="empty-state">当前故障还没有维修建议。</p>

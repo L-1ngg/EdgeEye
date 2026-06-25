@@ -1001,6 +1001,70 @@ button.event-row:hover {
   justify-items: start;
 }
 
+.advice-thinking {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 18px 4px;
+}
+
+.advice-thinking__dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.advice-thinking__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: thinking-bounce 1.2s var(--ease) infinite;
+}
+
+.advice-thinking__dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.advice-thinking__dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.advice-thinking__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.advice-thinking__sweep {
+  position: relative;
+  width: 180px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.advice-thinking__sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: translateX(-100%);
+  animation: loading-sweep 1.2s var(--ease) infinite;
+}
+
+@keyframes thinking-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
 .fault-evidence {
   display: grid;
   gap: 10px;
