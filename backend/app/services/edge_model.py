@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ from app.models.inspection import Detection
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_ASCEND_TOOLKIT_HOME = Path("/usr/local/Ascend/ascend-toolkit/latest")
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,7 @@ class EdgeModelInferenceService:
             capture_output=True,
             cwd=PROJECT_ROOT,
             text=True,
+            env=build_edge_model_env(),
             timeout=settings.edge_model_timeout_seconds,
         )
         if result.returncode != 0:
@@ -121,6 +124,52 @@ def resolve_python_executable(value: str) -> str:
             if candidate.is_file():
                 return str(candidate)
     return value
+
+
+def build_edge_model_env() -> dict[str, str]:
+    env = os.environ.copy()
+    toolkit_home = Path(env.get("ASCEND_TOOLKIT_HOME") or DEFAULT_ASCEND_TOOLKIT_HOME).expanduser()
+    if not toolkit_home.exists():
+        return env
+
+    env["ASCEND_TOOLKIT_HOME"] = str(toolkit_home)
+    env["ASCEND_AICPU_PATH"] = str(toolkit_home)
+    env["ASCEND_OPP_PATH"] = str(toolkit_home / "opp")
+    env["TOOLCHAIN_HOME"] = str(toolkit_home / "toolkit")
+    env["ASCEND_HOME_PATH"] = str(toolkit_home)
+
+    prepend_env_paths(
+        env,
+        "PYTHONPATH",
+        [
+            toolkit_home / "python" / "site-packages",
+            toolkit_home / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe",
+        ],
+    )
+    prepend_env_paths(
+        env,
+        "LD_LIBRARY_PATH",
+        [
+            toolkit_home / "lib64",
+            toolkit_home / "runtime" / "lib64",
+            toolkit_home / "lib64" / "plugin" / "opskernel",
+            toolkit_home / "lib64" / "plugin" / "nnengine",
+            toolkit_home / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe" / "op_tiling",
+            Path("/var/davinci/driver/lib64"),
+            Path("/var/davinci/driver/lib64/common"),
+            Path("/var/davinci/driver/lib64/driver"),
+        ],
+    )
+    prepend_env_paths(env, "PATH", [toolkit_home / "bin", toolkit_home / "compiler" / "ccec_compiler" / "bin"])
+    return env
+
+
+def prepend_env_paths(env: dict[str, str], name: str, paths: list[Path]) -> None:
+    current = [part for part in env.get(name, "").split(os.pathsep) if part]
+    preferred = [str(path) for path in paths if path.exists()]
+    values = list(dict.fromkeys(preferred + current))
+    if values:
+        env[name] = os.pathsep.join(values)
 
 
 def ensure_file(path: Path, label: str) -> None:

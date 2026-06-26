@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -67,6 +68,45 @@ def test_edge_model_service_parses_bridge_output(monkeypatch, tmp_path: Path) ->
     assert result.detections[0].faultType == "surface_damage"
     assert result.detections[0].bbox == (10, 20, 100, 200)
     assert result.annotated_image_path == annotated_path
+
+
+def test_build_edge_model_env_adds_ascend_toolkit_paths(monkeypatch, tmp_path: Path) -> None:
+    toolkit_home = tmp_path / "ascend-toolkit"
+    for path in [
+        toolkit_home / "python" / "site-packages",
+        toolkit_home / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe",
+        toolkit_home / "lib64",
+        toolkit_home / "runtime" / "lib64",
+        toolkit_home / "bin",
+        toolkit_home / "compiler" / "ccec_compiler" / "bin",
+    ]:
+        path.mkdir(parents=True)
+
+    monkeypatch.setattr(edge_model_module, "DEFAULT_ASCEND_TOOLKIT_HOME", toolkit_home)
+    monkeypatch.delenv("ASCEND_TOOLKIT_HOME", raising=False)
+    monkeypatch.setenv("PYTHONPATH", "/existing/python")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/existing/lib")
+    monkeypatch.setenv("PATH", "/existing/bin")
+
+    env = edge_model_module.build_edge_model_env()
+
+    assert env["ASCEND_TOOLKIT_HOME"] == str(toolkit_home)
+    assert env["ASCEND_AICPU_PATH"] == str(toolkit_home)
+    assert env["ASCEND_OPP_PATH"] == str(toolkit_home / "opp")
+    assert env["TOOLCHAIN_HOME"] == str(toolkit_home / "toolkit")
+    assert env["ASCEND_HOME_PATH"] == str(toolkit_home)
+    assert env["PYTHONPATH"].split(os.pathsep)[:2] == [
+        str(toolkit_home / "python" / "site-packages"),
+        str(toolkit_home / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe"),
+    ]
+    assert env["LD_LIBRARY_PATH"].split(os.pathsep)[:2] == [
+        str(toolkit_home / "lib64"),
+        str(toolkit_home / "runtime" / "lib64"),
+    ]
+    assert env["PATH"].split(os.pathsep)[:2] == [
+        str(toolkit_home / "bin"),
+        str(toolkit_home / "compiler" / "ccec_compiler" / "bin"),
+    ]
 
 
 def test_edge_model_service_degrades_when_model_missing(monkeypatch, tmp_path: Path) -> None:
