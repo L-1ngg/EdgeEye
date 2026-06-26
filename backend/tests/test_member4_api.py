@@ -176,6 +176,13 @@ def test_member4_detection_advice_and_report_flow(monkeypatch) -> None:
     assert upload_data["duplicate"] is False
     assert upload_data["faultsCreated"] == 1
     assert upload_data["alarmsCreated"] == 1
+    assert upload_data["reportTriggered"] is True
+
+    live_reports = client.get(f"/api/reports?inspectionId={inspection_id}")
+    assert live_reports.status_code == 200
+    live_report = live_reports.json()["data"]["items"][0]
+    assert live_report["reportStatus"] == "ready"
+    assert live_report["title"] == "2号线路绝缘子 表面破损巡检报告"
 
     duplicate = client.post("/api/detection/results", json=payload)
     assert duplicate.status_code == 200
@@ -329,6 +336,81 @@ def test_detection_upload_idempotency_conflict() -> None:
     body = conflict.json()
     assert body["success"] is False
     assert body["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+
+
+def test_resolved_fault_creates_new_event_when_damage_is_detected_again() -> None:
+    inspection_id = start_inspection()
+    payload = detection_payload(inspection_id)
+    assert client.post("/api/detection/results", json=payload).status_code == 200
+    initial_reports = client.get(f"/api/reports?inspectionId={inspection_id}").json()["data"]["items"]
+    assert len(initial_reports) == 1
+    first_report_id = initial_reports[0]["reportId"]
+
+    fault = client.get("/api/faults").json()["data"]["items"][0]
+    resolved = client.patch(
+        f"/api/faults/{fault['faultId']}/status",
+        json={"processStatus": "resolved", "operator": "team", "note": "fixed"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["data"]["processStatus"] == "resolved"
+
+    repeat_payload = detection_payload(inspection_id)
+    repeat_payload.update(
+        {
+            "idempotencyKey": f"{inspection_id}:frame-000002",
+            "frameId": "frame-000002",
+            "frameSeq": 2,
+        }
+    )
+    upload = client.post("/api/detection/results", json=repeat_payload)
+    assert upload.status_code == 200
+    upload_data = upload.json()["data"]
+    assert upload_data["faultsCreated"] == 1
+    assert upload_data["faultsUpdated"] == 0
+
+    faults = client.get("/api/faults").json()["data"]["items"]
+    new_fault = faults[0]
+    old_fault = next(item for item in faults if item["faultId"] == fault["faultId"])
+    assert new_fault["faultId"] != fault["faultId"]
+    assert new_fault["processStatus"] == "pending"
+    assert new_fault["eventStatus"] == "ongoing"
+    assert new_fault["occurrenceCount"] == 1
+    assert new_fault["eventKey"].endswith(":occurrence-0002")
+    assert old_fault["processStatus"] == "resolved"
+    assert old_fault["occurrenceCount"] == 1
+
+    event = client.get("/api/events").json()["data"]["items"][0]
+    assert event["faultId"] == new_fault["faultId"]
+    assert event["processStatus"] == "pending"
+    assert event["summary"] == "累计检测 1 次，最佳证据帧：frame-000002。"
+
+    reports = client.get(f"/api/reports?inspectionId={inspection_id}").json()["data"]["items"]
+    assert len(reports) == 2
+    latest_report = reports[0]
+    assert latest_report["reportId"] != first_report_id
+    report_detail = client.get(f"/api/reports/{latest_report['reportId']}").json()["data"]
+    assert len(report_detail["faults"]) == 2
+
+    third_payload = detection_payload(inspection_id)
+    third_payload.update(
+        {
+            "idempotencyKey": f"{inspection_id}:frame-000003",
+            "frameId": "frame-000003",
+            "frameSeq": 3,
+        }
+    )
+    third_upload = client.post("/api/detection/results", json=third_payload)
+    assert third_upload.status_code == 200
+    third_upload_data = third_upload.json()["data"]
+    assert third_upload_data["faultsCreated"] == 0
+    assert third_upload_data["faultsUpdated"] == 1
+
+    current_fault = client.get("/api/faults").json()["data"]["items"][0]
+    assert current_fault["faultId"] == new_fault["faultId"]
+    assert current_fault["occurrenceCount"] == 2
+    reports_after_update = client.get(f"/api/reports?inspectionId={inspection_id}").json()["data"]["items"]
+    assert len(reports_after_update) == 2
+    assert reports_after_update[0]["reportId"] == latest_report["reportId"]
 
 
 def test_frontend_action_missing_resources_use_error_envelope() -> None:

@@ -140,12 +140,13 @@ export function App() {
 
     async function refreshOperationalData() {
       try {
-        const [dashboardResult, systemResult, eventResult, faultResult, alarmResult] = await Promise.all([
+        const [dashboardResult, systemResult, eventResult, faultResult, alarmResult, reportResult] = await Promise.all([
           getDashboard(),
           getSystemOverview(),
           getEvents(),
           getFaults(),
-          getAlarms()
+          getAlarms(),
+          getReports()
         ]);
 
         if (cancelled) {
@@ -163,13 +164,15 @@ export function App() {
             system: systemResult.data,
             events: eventResult.data,
             faults: faultResult.data,
-            alarms: alarmResult.data
+            alarms: alarmResult.data,
+            reports: reportResult.data
           };
         });
         setDataSources((currentSources) => ({
           ...currentSources,
           dashboard: dashboardResult.source,
           faults: eventResult.source === "api" && faultResult.source === "api" && alarmResult.source === "api" ? "api" : "unavailable",
+          reports: reportResult.source,
           assets: faultResult.source === "api" && alarmResult.source === "api" ? "api" : "unavailable"
         }));
       } catch {
@@ -181,6 +184,7 @@ export function App() {
           ...currentSources,
           dashboard: "unavailable",
           faults: "unavailable",
+          reports: "unavailable",
           assets: "unavailable"
         }));
       }

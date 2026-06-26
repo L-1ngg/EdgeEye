@@ -326,6 +326,7 @@ class InspectionService:
                 elif alarm_result == "suppressed":
                     alarms_suppressed += 1
 
+            report_triggered = faults_created > 0 or faults_updated > 0
             detection_payload = [item.model_dump(mode="json") for item in detections]
             try:
                 connection.execute(
@@ -337,7 +338,7 @@ class InspectionService:
                         image_height, detections_json, performance_json, faults_created, faults_updated,
                         alarms_created, alarms_suppressed, report_triggered, warnings_json
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '[]')
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')
                     """,
                     (
                         result_id,
@@ -364,6 +365,7 @@ class InspectionService:
                         faults_updated,
                         alarms_created,
                         alarms_suppressed,
+                        int(report_triggered),
                     ),
                 )
             except sqlite3.IntegrityError as exc:
@@ -373,6 +375,9 @@ class InspectionService:
                     status_code=409,
                     details={"inspectionId": payload.inspectionId, "frameId": payload.frameId},
                 ) from exc
+
+            if report_triggered:
+                self._generate_report(connection, payload.inspectionId, received_at, create_new=faults_created > 0)
 
             row = connection.execute(
                 "SELECT * FROM detection_results WHERE result_id = ?",
@@ -924,11 +929,12 @@ class InspectionService:
         fault_type = detection.faultType or "unknown"
         device_type = detection.deviceType or device["device_type"] or "unknown"
         risk_level, alarm_level, priority = self._classify_fault(fault_type, detection.confidence)
-        event_key = payload.eventKey or f"{payload.inspectionId}:{device_id}:{fault_type}"
+        base_event_key = payload.eventKey or f"{payload.inspectionId}:{device_id}:{fault_type}"
         event_status = "resolved" if payload.uploadReason == "fault_resolved" else "ongoing"
-        existing = connection.execute("SELECT * FROM faults WHERE event_key = ?", (event_key,)).fetchone()
+        existing = self._find_fault_for_detection(connection, base_event_key, event_status)
         if existing is None:
             fault_id = self._next_id(connection, "faults", "fault_id", "fault")
+            event_key = self._next_fault_event_key(connection, base_event_key)
             connection.execute(
                 """
                 INSERT INTO faults (
@@ -1013,7 +1019,7 @@ class InspectionService:
                 int(merged_risk != "none"),
                 merged_alarm,
                 merged_priority,
-                "resolved" if event_status == "resolved" else existing["process_status"],
+                self._next_fault_process_status(existing["process_status"], event_status),
                 event_status,
                 _iso(seen_at),
                 detection.confidence,
@@ -1026,6 +1032,75 @@ class InspectionService:
         )
         row = connection.execute("SELECT * FROM faults WHERE fault_id = ?", (existing["fault_id"],)).fetchone()
         return self._fault_from_row(row), False
+
+    def _next_fault_process_status(self, existing_process_status: str, event_status: str) -> str:
+        if event_status == "resolved":
+            return "resolved"
+        return existing_process_status
+
+    def _find_fault_for_detection(
+        self,
+        connection: sqlite3.Connection,
+        base_event_key: str,
+        event_status: str,
+    ) -> sqlite3.Row | None:
+        active = connection.execute(
+            """
+            SELECT *
+            FROM faults
+            WHERE (event_key = ? OR event_key LIKE ? ESCAPE '!')
+              AND process_status IN ('pending', 'processing')
+            ORDER BY last_seen_at DESC
+            LIMIT 1
+            """,
+            self._event_key_scope_params(base_event_key),
+        ).fetchone()
+        if active is not None:
+            return active
+
+        latest = connection.execute(
+            """
+            SELECT *
+            FROM faults
+            WHERE event_key = ? OR event_key LIKE ? ESCAPE '!'
+            ORDER BY last_seen_at DESC
+            LIMIT 1
+            """,
+            self._event_key_scope_params(base_event_key),
+        ).fetchone()
+        if latest is None:
+            return None
+        if event_status == "resolved":
+            return latest
+        if latest["process_status"] in {"resolved", "ignored"}:
+            return None
+        return latest
+
+    def _next_fault_event_key(self, connection: sqlite3.Connection, base_event_key: str) -> str:
+        rows = connection.execute(
+            """
+            SELECT event_key
+            FROM faults
+            WHERE event_key = ? OR event_key LIKE ? ESCAPE '!'
+            """,
+            self._event_key_scope_params(base_event_key),
+        ).fetchall()
+        existing = {row["event_key"] for row in rows}
+        if not existing:
+            return base_event_key
+
+        index = len(existing) + 1
+        while True:
+            candidate = f"{base_event_key}:occurrence-{index:04d}"
+            if candidate not in existing:
+                return candidate
+            index += 1
+
+    def _event_key_scope_params(self, base_event_key: str) -> tuple[str, str]:
+        return base_event_key, f"{self._escape_like(base_event_key)}:%"
+
+    def _escape_like(self, value: str) -> str:
+        return value.replace("!", "!!").replace("%", "!%").replace("_", "!_")
 
     def _upsert_alarm(self, connection: sqlite3.Connection, fault: Any, triggered_at: datetime) -> str | None:
         if not fault.alarmRequired:
@@ -1094,12 +1169,28 @@ class InspectionService:
             triggered_at = triggered_at.replace(tzinfo=last.tzinfo)
         return triggered_at - last > timedelta(seconds=window_seconds)
 
-    def _generate_report(self, connection: sqlite3.Connection, inspection_id: str, generated_at: datetime) -> None:
-        existing = connection.execute(
-            "SELECT * FROM reports WHERE inspection_id = ? AND format = 'html' AND version = 1",
-            (inspection_id,),
-        ).fetchone()
+    def _generate_report(
+        self,
+        connection: sqlite3.Connection,
+        inspection_id: str,
+        generated_at: datetime,
+        *,
+        create_new: bool = False,
+    ) -> None:
+        existing = None
+        if not create_new:
+            existing = connection.execute(
+                """
+                SELECT *
+                FROM reports
+                WHERE inspection_id = ? AND format = 'html'
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                (inspection_id,),
+            ).fetchone()
         report_id = existing["report_id"] if existing else self._next_report_id(connection, generated_at)
+        version = existing["version"] if existing else self._next_report_version(connection, inspection_id)
         document = self._build_report_document(connection, inspection_id, report_id=report_id)
         title = document["title"]
         summary = document["summary"]
@@ -1130,9 +1221,9 @@ class InspectionService:
             INSERT INTO reports (
                 report_id, inspection_id, title, summary, report_status, format, url, created_at, exports_json, version
             )
-            VALUES (?, ?, ?, ?, 'ready', 'html', ?, ?, ?, 1)
+            VALUES (?, ?, ?, ?, 'ready', 'html', ?, ?, ?, ?)
             """,
-            (report_id, inspection_id, title, summary, url, _iso(generated_at), _json_dump(exports)),
+            (report_id, inspection_id, title, summary, url, _iso(generated_at), _json_dump(exports), version),
         )
         self._write_html_report(document, f"{report_id}.html")
 
@@ -1800,6 +1891,13 @@ class InspectionService:
     def _next_report_id(self, connection: sqlite3.Connection, generated_at: datetime) -> str:
         count = connection.execute("SELECT COUNT(*) FROM reports").fetchone()[0] + 1
         return f"report-{generated_at.strftime('%Y%m%d')}-{count:04d}"
+
+    def _next_report_version(self, connection: sqlite3.Connection, inspection_id: str) -> int:
+        row = connection.execute(
+            "SELECT COALESCE(MAX(version), 0) + 1 FROM reports WHERE inspection_id = ? AND format = 'html'",
+            (inspection_id,),
+        ).fetchone()
+        return int(row[0])
 
     def _enrich_detections(self, result_id: str, payload: DetectionUploadRequest) -> list[Detection]:
         enriched = []
