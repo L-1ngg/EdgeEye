@@ -1,1 +1,0 @@
-{"type":"spec","path":".trellis/spec/training/dataset-preparation.md","reason":"Defines insulator-v1 dataset conversion, duplicate-safe split, and train-only sampling constraints."}

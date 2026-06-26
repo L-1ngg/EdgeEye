@@ -257,7 +257,6 @@ uv run python validate_dataset.py \
 | 准备或校验数据集 | `training/prepare_dataset.py`、`training/validate_dataset.py` | `dataset/README.md`、`dataset/docs/` 报告 |
 | 训练或导出模型 | `training/train.py`、`training/export_onnx.py` | `training/README.md`、`dataset/docs/` 指标和交付说明 |
 | 整理边缘侧或 Atlas 交付物 | `model-deploy/` | `models/`、`docs/01-edge-atlas.md`、后端上传契约 |
-| 更新项目开发规则 | `.trellis/spec/`、`AGENTS.md` | 如果人类也需要知道，同步到对应 README 或 `docs/` |
 
 `models/` 是本地模型产物工作区；`model-deploy/` 是边缘侧交付工作区，
 用于部署脚本、类别/预处理元数据、冒烟 payload 和被忽略的部署产物。
@@ -314,7 +313,6 @@ uv run python validate_dataset.py \
 ├── models/               被忽略的本地模型产物和 artifact 占位目录
 ├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
 ├── web/                  React + Vite 仪表盘前端
-├── .trellis/             项目工作流、任务状态和编码规范
 ├── docker-compose.yml    后端部署脚手架
 ├── README.md             中文项目入口
 ├── README.en.md          英文项目入口

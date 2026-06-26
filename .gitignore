@@ -55,3 +55,14 @@ fusion_result.json
 #报告
 报告/
 报告/*
+# Local AI coding assistants / workflow metadata
+.trellis/
+.codex/
+.agents/
+.agent/
+.claude/
+.cursor/
+.windsurf/
+AGENTS.md
+CLAUDE.md
+GEMINI.md

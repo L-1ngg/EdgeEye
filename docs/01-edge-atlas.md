@@ -212,13 +212,7 @@ ONNX -> atc 转 OM -> Atlas ACL 加载 OM -> 同样生成 EdgeEye Detection payl
 | 当前测试配置 | MJPG `640x480 @ 30 FPS` |
 | 支持分辨率示例 | `640x480`、`800x600`、`1280x720`、`1280x960` |
 
-测试截图和短视频保存在当前 Trellis 任务目录中：
-
-- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480.jpg`
-- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480-warmup.jpg`
-- `.trellis/tasks/06-17-edge-atlas/camera-usb-video0-640x480-3s.mjpeg`
-
-当前截图可证明 `/dev/video0` 能读帧，但画面几乎全黑。演示前需要将摄像头对准亮处或调整曝光后重新保存截图和视频。
+本地验证截图和短视频不随公开仓库发布。演示前需要按上表配置重新采集画面，并确认摄像头对准亮处或完成曝光调整。
 
 ## 输出
 

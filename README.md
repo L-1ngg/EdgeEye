@@ -264,7 +264,6 @@ EDGEEYE_LLM_API_KEY=<your-deepseek-api-key>
 | 准备或校验数据集 | `training/prepare_dataset.py`、`training/validate_dataset.py` | `dataset/README.md`、`dataset/docs/` 报告 |
 | 训练或导出模型 | `training/train.py`、`training/export_onnx.py` | `training/README.md`、`dataset/docs/` 指标和交接说明 |
 | 打包边缘侧或 Atlas 交接材料 | `model-deploy/` | `models/`、`docs/01-edge-atlas.md`、后端上传契约 |
-| 更新项目开发规则 | `.trellis/spec/`、`AGENTS.md` | 需要给人阅读时同步相关 README 或 `docs/` 页面 |
 
 `models/` 是本地模型输出工作区。`model-deploy/` 是边缘侧交接工作区，用于放置部署脚本、类别和预处理元数据、smoke payload 以及被忽略的部署产物。候选模型放到 `models/` 后，不等于已经成为 Atlas 交付模型；是否晋升需要记录推广决策并同步契约。
 
@@ -318,7 +317,6 @@ uv run python validate_dataset.py \
 ├── models/               被忽略的本地模型输出和 artifact 占位
 ├── training/             YOLO 数据准备、训练和 ONNX 导出脚本
 ├── web/                  React + Vite 仪表盘前端
-├── .trellis/             项目工作流、任务状态和编码规范
 ├── docker-compose.yml    后端部署脚手架
 ├── README.md             中文项目入口
 ├── README.en.md          英文项目入口

@@ -27,11 +27,9 @@
 | 调整故障规则或维修建议 | [成员3：故障规则与大模型维修建议设计](./03-rules-advice.md) | 同步后端 advice/fault API 契约 |
 | 修改后端实现 | [成员4：后端、数据库、报告与大模型维修建议接口](./04-backend-api.md) | 同步 API 文档、OpenAPI 和根 README 的接口概览 |
 | 修改前端展示或联调测试 | [成员5：前端可视化、系统测试与答辩](./05-frontend-testing.md) | 同步前端契约类型和测试说明 |
-| 调整工程规则、运行命令或目录边界 | [工程规范与联调标准](./engineering-standards.md) | 必要时同步根 README 和 `AGENTS.md` |
+| 调整工程规则、运行命令或目录边界 | [工程规范与联调标准](./engineering-standards.md) | 必要时同步根 README |
 
-如果改动会影响人类联调，优先更新 `docs/`；如果改动只影响 agent 写代码习惯，
-优先更新 `.trellis/spec/` 或 `AGENTS.md`。两类读者都需要知道时，两边都要同步，
-但不要在 agent 规则文件里复制文档正文。
+如果改动会影响联调、部署、运行命令或目录边界，优先更新 `docs/` 和根 README，避免公开文档与实际项目状态脱节。
 
 ## 系统总体流程
 
